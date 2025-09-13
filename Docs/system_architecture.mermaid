@@ -1,0 +1,64 @@
+graph TB
+    subgraph "🖥️ Client Layer"
+        UI[React Frontend<br/>TypeScript + Vite]
+        THEME[Kinross Theme<br/>Gold/Navy Colors]
+        FORMS[Assessment Forms<br/>Real-time Validation]
+    end
+
+    subgraph "🌐 API Layer"
+        API[FastAPI Backend<br/>Python 3.13]
+        CORS[CORS Middleware<br/>Cross-Origin Support]
+        STATIC[Static File Server<br/>GHS Logo Serving]
+    end
+
+    subgraph "🗄️ Data Layer"
+        DB[(SQLite Database<br/>chemical_compatibility.db)]
+        FILES[File System<br/>uploads/ghs/]
+        BACKUP[Backup System<br/>Automated Backups]
+    end
+
+    subgraph "🧮 Business Logic"
+        CALC[Risk Calculator<br/>GHS Compatibility Rules]
+        PAIRS[Pair Generator<br/>Unique Combinations]
+        STATUS[Status Engine<br/>Safe/Caution/Danger]
+    end
+
+    subgraph "🔒 Data Models"
+        GHS[GHS Categories<br/>9 Standard Types]
+        CONT[Containers<br/>Dept/Location/Type]
+        ASSESS[Assessments<br/>Hazard Pairs + Distances]
+        AUDIT[Audit Trail<br/>Complete History]
+    end
+
+    %% Connections
+    UI --> API
+    THEME --> UI
+    FORMS --> UI
+    
+    API --> CALC
+    API --> DB
+    API --> FILES
+    CORS --> API
+    STATIC --> API
+    
+    CALC --> PAIRS
+    CALC --> STATUS
+    
+    DB --> GHS
+    DB --> CONT
+    DB --> ASSESS
+    DB --> AUDIT
+    
+    FILES --> STATIC
+    BACKUP --> DB
+
+    %% Styling
+    classDef frontend fill:#D4A553,stroke:#1E3A5F,stroke-width:2px,color:#fff
+    classDef backend fill:#1E3A5F,stroke:#D4A553,stroke-width:2px,color:#fff
+    classDef data fill:#2E7D32,stroke:#1E3A5F,stroke-width:2px,color:#fff
+    classDef logic fill:#FF8F00,stroke:#1E3A5F,stroke-width:2px,color:#fff
+
+    class UI,THEME,FORMS frontend
+    class API,CORS,STATIC backend
+    class DB,FILES,BACKUP data
+    class CALC,PAIRS,STATUS,GHS,CONT,ASSESS,AUDIT logic

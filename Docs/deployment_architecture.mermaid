@@ -1,0 +1,79 @@
+graph TB
+    subgraph "🖥️ Development Environment"
+        DEV_FE[React Dev Server<br/>npm run dev<br/>Port: 5173]
+        DEV_BE[FastAPI Dev Server<br/>python main.py<br/>Port: 8000]
+        DEV_DB[(SQLite Dev DB<br/>chemical_compatibility.db)]
+    end
+    
+    subgraph "🏭 Production Environment"
+        subgraph "🌐 Web Server"
+            NGINX[Nginx Reverse Proxy<br/>Port: 80/443<br/>SSL Termination]
+        end
+        
+        subgraph "🐳 Application Containers"
+            PROD_FE[React Build<br/>Static Files<br/>Nginx Served]
+            PROD_BE[FastAPI Production<br/>Uvicorn + Gunicorn<br/>Port: 8000]
+        end
+        
+        subgraph "💾 Data Persistence"
+            PROD_DB[(SQLite Production<br/>Persistent Volume)]
+            FILES[GHS Logo Files<br/>uploads/ghs/]
+            BACKUPS[Automated Backups<br/>Daily Snapshots]
+        end
+    end
+    
+    subgraph "👥 Users"
+        BROWSER[Web Browser<br/>Chrome/Firefox/Edge]
+        MOBILE[Mobile Device<br/>Responsive Design]
+        DESKTOP[Desktop App<br/>Electron Wrapper]
+    end
+    
+    subgraph "🔧 DevOps Tools"
+        DOCKER[Docker Compose<br/>Multi-container Setup]
+        MONITOR[Monitoring<br/>Health Checks + Logs]
+        CI_CD[CI/CD Pipeline<br/>GitHub Actions]
+    end
+    
+    %% Development Connections
+    DEV_FE --> DEV_BE
+    DEV_BE --> DEV_DB
+    
+    %% Production Connections
+    BROWSER --> NGINX
+    MOBILE --> NGINX
+    DESKTOP --> NGINX
+    
+    NGINX --> PROD_FE
+    NGINX --> PROD_BE
+    PROD_BE --> PROD_DB
+    PROD_BE --> FILES
+    
+    PROD_DB --> BACKUPS
+    
+    %% DevOps Connections
+    DOCKER --> PROD_FE
+    DOCKER --> PROD_BE
+    DOCKER --> PROD_DB
+    
+    MONITOR --> PROD_BE
+    MONITOR --> PROD_DB
+    
+    CI_CD --> DOCKER
+    
+    %% Deployment Flow
+    DEV_FE -.->|Build & Deploy| PROD_FE
+    DEV_BE -.->|Build & Deploy| PROD_BE
+    DEV_DB -.->|Schema Migration| PROD_DB
+    
+    %% Styling
+    classDef dev fill:#4CAF50,stroke:#1E3A5F,stroke-width:2px,color:#fff
+    classDef prod fill:#1E3A5F,stroke:#D4A553,stroke-width:2px,color:#fff
+    classDef user fill:#D4A553,stroke:#1E3A5F,stroke-width:2px,color:#fff
+    classDef tools fill:#FF8F00,stroke:#1E3A5F,stroke-width:2px,color:#fff
+    classDef data fill:#2E7D32,stroke:#1E3A5F,stroke-width:2px,color:#fff
+    
+    class DEV_FE,DEV_BE,DEV_DB dev
+    class NGINX,PROD_FE,PROD_BE prod
+    class BROWSER,MOBILE,DESKTOP user
+    class DOCKER,MONITOR,CI_CD tools
+    class PROD_DB,FILES,BACKUPS data

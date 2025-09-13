@@ -1,0 +1,67 @@
+flowchart TD
+    START([👤 User Opens App]) --> LOAD[📋 Load GHS Categories<br/>GET /ghs-categories/]
+    
+    LOAD --> FORM{📝 Fill Container Form}
+    FORM --> DEPT[🏢 Enter Department]
+    FORM --> LOC[📍 Enter Location]
+    FORM --> CONT[📦 Enter Container ID]
+    FORM --> TYPE[📏 Select Type: 20ft/40ft]
+    FORM --> USER[👨‍💼 Enter Submitted By]
+    
+    DEPT --> SELECT
+    LOC --> SELECT
+    CONT --> SELECT
+    TYPE --> SELECT
+    USER --> SELECT[🧪 Select GHS Hazards<br/>Visual Grid Interface]
+    
+    SELECT --> SINGLE{Single Hazard?}
+    
+    SINGLE -->|Yes| SUBMIT_SINGLE[✅ Submit Single Hazard<br/>POST /containers/]
+    SINGLE -->|No| PAIRS[🔄 Auto-Generate Pairs<br/>Frontend Logic]
+    
+    PAIRS --> PREVIEW[👁️ Real-time Preview<br/>POST /preview-status/]
+    PREVIEW --> DISTANCE[📐 Enter Distances<br/>Live Status Updates]
+    
+    DISTANCE --> STATUS{Check Status}
+    STATUS --> SAFE[🟢 SAFE<br/>Green Background]
+    STATUS --> CAUTION[🟡 CAUTION<br/>Yellow Background]
+    STATUS --> DANGER[🔴 DANGER<br/>Red Background]
+    
+    SAFE --> SUBMIT
+    CAUTION --> SUBMIT
+    DANGER --> SUBMIT[📤 Submit Assessment<br/>POST /containers/]
+    
+    SUBMIT_SINGLE --> SAVE
+    SUBMIT --> SAVE[(💾 Save to Database<br/>4 Tables Updated)]
+    
+    SAVE --> SUCCESS[✅ Success Message<br/>Container ID Returned]
+    SUCCESS --> VIEW[👀 View Assessments<br/>GET /containers/]
+    
+    VIEW --> DISPLAY[📊 Display Results<br/>Color-coded Matrix]
+    DISPLAY --> HISTORY[📚 Assessment History<br/>Full Audit Trail]
+    
+    %% Error Handling
+    FORM --> ERROR1{❌ Validation Error?}
+    ERROR1 -->|Yes| ALERT1[⚠️ Show Error Message]
+    ALERT1 --> FORM
+    
+    SUBMIT --> ERROR2{❌ Server Error?}
+    ERROR2 -->|Yes| ALERT2[⚠️ Show Error Message]
+    ALERT2 --> DISTANCE
+    
+    %% Reset Flow
+    DISTANCE --> RESET[🔄 Reset Form?]
+    RESET -->|Yes| FORM
+    
+    %% Styling
+    classDef user fill:#D4A553,stroke:#1E3A5F,stroke-width:2px,color:#fff
+    classDef process fill:#1E3A5F,stroke:#D4A553,stroke-width:2px,color:#fff
+    classDef decision fill:#FF8F00,stroke:#1E3A5F,stroke-width:2px,color:#fff
+    classDef status fill:#2E7D32,stroke:#1E3A5F,stroke-width:2px,color:#fff
+    classDef error fill:#C62828,stroke:#1E3A5F,stroke-width:2px,color:#fff
+    
+    class START,USER,DEPT,LOC,CONT,TYPE user
+    class LOAD,SELECT,PAIRS,PREVIEW,DISTANCE,SUBMIT,SAVE,DISPLAY process
+    class FORM,SINGLE,STATUS,ERROR1,ERROR2 decision
+    class SAFE,CAUTION,DANGER,SUCCESS status
+    class ALERT1,ALERT2 error

@@ -1,0 +1,62 @@
+erDiagram
+    GHS_CATEGORIES {
+        int id PK
+        string name
+        string symbol_code UK "GHS01-GHS09"
+        text description
+        string logo_path
+        timestamp created_at
+    }
+    
+    CONTAINERS {
+        int id PK
+        string department
+        string location
+        string submitted_by
+        string container
+        string container_type "20ft/40ft"
+        timestamp submitted_at
+    }
+    
+    CONTAINER_HAZARDS {
+        int id PK
+        int container_id FK
+        int ghs_category_id FK
+    }
+    
+    HAZARD_PAIRS {
+        int id PK
+        int container_id FK
+        int ghs_category_a_id FK
+        int ghs_category_b_id FK
+        real distance
+        boolean is_isolated
+        real min_required_distance
+        string status "safe/caution/danger"
+        timestamp created_at
+    }
+    
+    %% Relationships
+    GHS_CATEGORIES ||--o{ CONTAINER_HAZARDS : "categorizes"
+    CONTAINERS ||--o{ CONTAINER_HAZARDS : "contains"
+    CONTAINERS ||--o{ HAZARD_PAIRS : "assesses"
+    GHS_CATEGORIES ||--o{ HAZARD_PAIRS : "pairs_with_a"
+    GHS_CATEGORIES ||--o{ HAZARD_PAIRS : "pairs_with_b"
+    
+    %% Sample Data
+    GHS_CATEGORIES {
+        string name_examples "Explosive, Flammable, Oxidizing, Compressed Gas, Corrosive, Acute Toxicity, Serious Health Hazard, Health Hazard, Environmental Hazard"
+        string symbol_examples "GHS01, GHS02, GHS03, GHS04, GHS05, GHS06, GHS07, GHS08, GHS09"
+    }
+    
+    CONTAINERS {
+        string dept_examples "Mining Operations, Processing Plant, Maintenance, Safety Office"
+        string location_examples "Warehouse A, Building 3, Storage Room 101, Outdoor Yard 5"
+        string container_examples "CONT-001, CHM-2024-A15, STORAGE-UNIT-B7"
+    }
+    
+    HAZARD_PAIRS {
+        string status_examples "safe, caution, danger"
+        real distance_examples "0.0, 5.5, 12.0, 25.0, 30.0"
+        boolean isolated_examples "true (must be isolated), false (can coexist)"
+    }
