@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Simplified Chemical Container Safety Assessment API
-Compatible with Python 3.13 and newer SQLAlchemy versions
+Updated Chemical Container Safety Assessment API
+With new hazard categories based on DOT classification system
 """
 
 from fastapi import FastAPI, HTTPException, Depends
@@ -15,8 +15,8 @@ import json
 import os
 from pathlib import Path
 
-# Create uploads directory for GHS logos
-Path("uploads/ghs").mkdir(parents=True, exist_ok=True)
+# Create uploads directory for hazard logos
+Path("uploads/hazard").mkdir(parents=True, exist_ok=True)
 
 # FastAPI app
 app = FastAPI(title="Kinross Chemical Container Safety API")
@@ -35,16 +35,17 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 DATABASE_PATH = "chemical_compatibility.db"
 
 # Pydantic models
-class GHSCategoryResponse(BaseModel):
+class HazardCategoryResponse(BaseModel):
     id: int
     name: str
-    symbol_code: str
+    hazard_class: str
+    subclass: Optional[str] = None
     description: Optional[str] = None
     logo_path: Optional[str] = None
 
 class HazardPairData(BaseModel):
-    ghs_category_a_id: int
-    ghs_category_b_id: int
+    hazard_category_a_id: int
+    hazard_category_b_id: int
     distance: float
 
 class ContainerSubmission(BaseModel):
@@ -53,7 +54,7 @@ class ContainerSubmission(BaseModel):
     submitted_by: str
     container: str
     container_type: str
-    selected_hazards: List[int]  # List of GHS category IDs
+    selected_hazards: List[int]  # List of hazard category IDs
     hazard_pairs: List[HazardPairData]
 
 # Database functions
@@ -64,7 +65,7 @@ def get_db_connection():
     return conn
 
 def init_database():
-    """Initialize database with tables including new container columns"""
+    """Initialize database with new hazard categories"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
@@ -73,19 +74,20 @@ def init_database():
     cursor.execute("PRAGMA synchronous=NORMAL")
     cursor.execute("PRAGMA foreign_keys=ON")
     
-    # Create GHS categories table
+    # Create hazard categories table (updated schema)
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS ghs_categories (
+        CREATE TABLE IF NOT EXISTS hazard_categories (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
-            symbol_code TEXT NOT NULL UNIQUE,
+            hazard_class TEXT NOT NULL,
+            subclass TEXT,
             description TEXT,
             logo_path TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
     
-    # Check if containers table exists and what columns it has
+    # Check if containers table exists and migrate if needed
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='containers'")
     table_exists = cursor.fetchone()
     
@@ -95,9 +97,8 @@ def init_database():
         columns = [column[1] for column in cursor.fetchall()]
         
         if 'container' not in columns or 'container_type' not in columns:
-            print("🔄 Migrating containers table to add new columns...")
+            print("🔄 Migrating containers table...")
             
-            # Create new table with all required columns
             cursor.execute("""
                 CREATE TABLE containers_new (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -110,23 +111,19 @@ def init_database():
                 )
             """)
             
-            # Copy existing data if any exists
             try:
                 cursor.execute("""
                     INSERT INTO containers_new (id, department, location, submitted_by, submitted_at)
                     SELECT id, department, location, submitted_by, submitted_at FROM containers
                 """)
-                print(f"✅ Migrated existing container data")
+                print("✅ Migrated existing container data")
             except Exception as e:
                 print(f"ℹ️  No existing data to migrate: {e}")
             
-            # Drop old table and rename new one
             cursor.execute("DROP TABLE containers")
             cursor.execute("ALTER TABLE containers_new RENAME TO containers")
             print("✅ Migration completed!")
     else:
-        # Create new containers table with all columns
-        print("📋 Creating new containers table...")
         cursor.execute("""
             CREATE TABLE containers (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -138,143 +135,237 @@ def init_database():
                 submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        print("✅ Containers table created with all required columns")
     
-    # Create container_hazards table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS container_hazards (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            container_id INTEGER NOT NULL,
-            ghs_category_id INTEGER NOT NULL,
-            FOREIGN KEY (container_id) REFERENCES containers (id),
-            FOREIGN KEY (ghs_category_id) REFERENCES ghs_categories (id)
-        )
-    """)
+    # Create container_hazards table (updated foreign key) - only if not already created above
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='container_hazards'")
+    if not cursor.fetchone():
+        cursor.execute("""
+            CREATE TABLE container_hazards (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                container_id INTEGER NOT NULL,
+                hazard_category_id INTEGER NOT NULL,
+                FOREIGN KEY (container_id) REFERENCES containers (id),
+                FOREIGN KEY (hazard_category_id) REFERENCES hazard_categories (id)
+            )
+        """)
     
-    # Create hazard_pairs table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS hazard_pairs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            container_id INTEGER NOT NULL,
-            ghs_category_a_id INTEGER NOT NULL,
-            ghs_category_b_id INTEGER NOT NULL,
-            distance REAL NOT NULL,
-            is_isolated BOOLEAN NOT NULL,
-            min_required_distance REAL,
-            status TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (container_id) REFERENCES containers (id),
-            FOREIGN KEY (ghs_category_a_id) REFERENCES ghs_categories (id),
-            FOREIGN KEY (ghs_category_b_id) REFERENCES ghs_categories (id)
-        )
-    """)
+    # Create hazard_pairs table (updated foreign keys) - only if not already created above
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='hazard_pairs'")
+    if not cursor.fetchone():
+        cursor.execute("""
+            CREATE TABLE hazard_pairs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                container_id INTEGER NOT NULL,
+                hazard_category_a_id INTEGER NOT NULL,
+                hazard_category_b_id INTEGER NOT NULL,
+                distance REAL NOT NULL,
+                is_isolated BOOLEAN NOT NULL,
+                min_required_distance REAL,
+                status TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (container_id) REFERENCES containers (id),
+                FOREIGN KEY (hazard_category_a_id) REFERENCES hazard_categories (id),
+                FOREIGN KEY (hazard_category_b_id) REFERENCES hazard_categories (id)
+            )
+        """)
     
-    # Check if GHS categories exist, if not, add them
-    cursor.execute("SELECT COUNT(*) FROM ghs_categories")
+    # Drop old GHS tables if they exist and migrate data
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='ghs_categories'")
+    old_table_exists = cursor.fetchone()
+    
+    if old_table_exists:
+        print("🔄 Migrating from old GHS system to new hazard classification...")
+        cursor.execute("DROP TABLE IF EXISTS ghs_categories")
+        cursor.execute("DROP TABLE IF EXISTS container_hazards")  # Will be recreated
+        cursor.execute("DROP TABLE IF EXISTS hazard_pairs")  # Will be recreated
+        print("✅ Old tables cleaned up")
+    
+    # Check if hazard categories exist, if not, add them
+    cursor.execute("SELECT COUNT(*) FROM hazard_categories")
     if cursor.fetchone()[0] == 0:
-        # Insert the 9 standard GHS categories
-        ghs_categories = [
-            ("Explosive", "GHS01", "Substances and mixtures which have explosive properties", "/uploads/ghs/ghs01_explosive.png"),
-            ("Flammable", "GHS02", "Flammable gases, aerosols, liquids, and solids", "/uploads/ghs/ghs02_flammable.png"),
-            ("Oxidizing", "GHS03", "Oxidizing gases, liquids and solids", "/uploads/ghs/ghs03_oxidizing.png"),
-            ("Compressed Gas", "GHS04", "Gases under pressure", "/uploads/ghs/ghs04_gas.png"),
-            ("Corrosive", "GHS05", "Corrosive to metals and causes severe skin burns", "/uploads/ghs/ghs05_corrosive.png"),
-            ("Acute Toxicity", "GHS06", "Substances that are fatal or toxic", "/uploads/ghs/ghs06_toxic.png"),
-            ("Serious Health Hazard", "GHS07", "Harmful if swallowed, causes skin or eye irritation", "/uploads/ghs/ghs07_harmful.png"),
-            ("Health Hazard", "GHS08", "Carcinogenic, mutagenic, toxic to reproduction", "/uploads/ghs/ghs08_health.png"),
-            ("Environmental Hazard", "GHS09", "Hazardous to the aquatic environment", "/uploads/ghs/ghs09_environment.png")
+        # Insert the new hazard categories based on the provided images
+        hazard_categories = [
+            ("Flammable Gas", "2", None, "Gases which are flammable in air", "/uploads/hazard/class2_flammable_gas.png"),
+            ("Non-Flammable Non-Toxic Gas", "2", None, "Gases which are not flammable and not toxic", "/uploads/hazard/class2_nonflammable_gas.png"),
+            ("Toxic Gas", "2", None, "Gases which are known to be toxic or corrosive to humans", "/uploads/hazard/class2_toxic_gas.png"),
+            ("Oxidizing Gas", "2", None, "Gases which may cause or contribute to combustion", "/uploads/hazard/class2_oxidizing_gas.png"),
+            ("Flammable Liquid", "3", None, "Liquids having a flash point not more than 60°C", "/uploads/hazard/class3_flammable_liquid.png"),
+            ("Flammable Solid", "4", None, "Solid materials which can be readily ignited", "/uploads/hazard/class4_flammable_solid.png"),
+            ("Spontaneously Combustible", "4", None, "Substances liable to spontaneous combustion", "/uploads/hazard/class4_spontaneously_combustible.png"),
+            ("Dangerous When Wet", "4", None, "Substances which become spontaneously flammable when wet", "/uploads/hazard/class4_dangerous_when_wet.png"),
+            ("Oxidizing Agent", "5.1", None, "Substances which yield oxygen readily to support combustion", "/uploads/hazard/class5_1_oxidizing_agent.png"),
+            ("Organic Peroxide", "5.2", None, "Organic substances containing bivalent oxygen structure", "/uploads/hazard/class5_2_organic_peroxide.png"),
+            ("Toxic", "6", None, "Substances which are liable to cause death or serious injury if swallowed, inhaled, or absorbed through skin", "/uploads/hazard/class6_toxic.png"),
+            ("Corrosive", "8", None, "Substances which cause destruction to human skin, metals, or other materials", "/uploads/hazard/class8_corrosive.png")
         ]
         
         cursor.executemany("""
-            INSERT INTO ghs_categories (name, symbol_code, description, logo_path)
-            VALUES (?, ?, ?, ?)
-        """, ghs_categories)
+            INSERT INTO hazard_categories (name, hazard_class, subclass, description, logo_path)
+            VALUES (?, ?, ?, ?, ?)
+        """, hazard_categories)
         
-        print("✅ Initialized database with 9 GHS categories")
+        print("✅ Initialized database with 12 hazard categories")
     
     conn.commit()
     conn.close()
 
-def calculate_hazard_status(ghs_a_code: str, ghs_b_code: str, distance: float) -> tuple[str, bool, float]:
+def calculate_hazard_status(class_a: str, class_b: str, distance: float) -> tuple[str, bool, float]:
     """
-    Calculate safety status based on GHS categories and distance
+    Calculate safety status based on hazard classes and distance
+    Based on the compatibility matrix provided
     Returns: (status, is_isolated, min_required_distance)
     """
     
-    # Define incompatible pairs that require separation
-    incompatible_pairs = {
-        ('GHS01', 'GHS02'): 25.0,  # Explosive + Flammable
-        ('GHS01', 'GHS03'): 30.0,  # Explosive + Oxidizing
-        ('GHS02', 'GHS03'): 20.0,  # Flammable + Oxidizing
-        ('GHS01', 'GHS05'): 25.0,  # Explosive + Corrosive
-        ('GHS01', 'GHS06'): 30.0,  # Explosive + Toxic
-        ('GHS02', 'GHS05'): 15.0,  # Flammable + Corrosive
-        ('GHS03', 'GHS05'): 20.0,  # Oxidizing + Corrosive
-        ('GHS06', 'GHS05'): 15.0,  # Toxic + Corrosive
+    # Compatibility matrix based on the provided image
+    # Key: (class_a, class_b) -> (is_isolated, min_distance_meters)
+    compatibility_matrix = {
+        # Flammable Gas (Class 2)
+        ("2_flammable", "2_flammable"): (False, 3.0),  # Same type
+        ("2_flammable", "2_nonflammable"): (False, 5.0),  # OK to store together
+        ("2_flammable", "2_toxic"): (False, 10.0),  # Segregate at least 3m
+        ("2_flammable", "2_oxidizing"): (False, 10.0),  # Segregate at least 3m
+        ("2_flammable", "3"): (False, 10.0),  # Segregate at least 3m
+        ("2_flammable", "4"): (False, 10.0),  # Segregate at least 3m
+        ("2_flammable", "5.1"): (False, 10.0),  # Segregate at least 3m
+        ("2_flammable", "5.2"): (True, float('inf')),  # Isolate
+        ("2_flammable", "6"): (False, 10.0),  # Segregate at least 3m
+        ("2_flammable", "8"): (False, 10.0),  # Segregate at least 3m
+        
+        # Non-Flammable Non-Toxic Gas (Class 2)
+        ("2_nonflammable", "2_nonflammable"): (False, 3.0),  # Same type
+        ("2_nonflammable", "2_toxic"): (False, 5.0),  # OK to store together
+        ("2_nonflammable", "2_oxidizing"): (False, 5.0),  # OK to store together
+        ("2_nonflammable", "3"): (False, 5.0),  # OK to store together
+        ("2_nonflammable", "4"): (False, 5.0),  # OK to store together
+        ("2_nonflammable", "5.1"): (False, 10.0),  # Segregate at least 3m
+        ("2_nonflammable", "5.2"): (True, float('inf')),  # Isolate
+        ("2_nonflammable", "6"): (False, 10.0),  # Segregate at least 3m
+        ("2_nonflammable", "8"): (False, 10.0),  # Segregate at least 3m
+        
+        # Toxic Gas (Class 2)
+        ("2_toxic", "2_toxic"): (False, 3.0),  # Same type
+        ("2_toxic", "2_oxidizing"): (False, 5.0),  # OK to store together
+        ("2_toxic", "3"): (False, 10.0),  # Segregate at least 3m
+        ("2_toxic", "4"): (False, 10.0),  # Segregate at least 3m
+        ("2_toxic", "5.1"): (False, 10.0),  # Segregate at least 3m
+        ("2_toxic", "5.2"): (True, float('inf')),  # Isolate
+        ("2_toxic", "6"): (False, 10.0),  # Segregate at least 3m
+        ("2_toxic", "8"): (False, 10.0),  # Segregate at least 3m
+        
+        # Oxidizing Gas (Class 2)
+        ("2_oxidizing", "2_oxidizing"): (False, 3.0),  # Same type
+        ("2_oxidizing", "3"): (False, 5.0),  # OK to store together
+        ("2_oxidizing", "4"): (False, 10.0),  # Segregate at least 3m
+        ("2_oxidizing", "5.1"): (False, 5.0),  # OK to store together
+        ("2_oxidizing", "5.2"): (True, float('inf')),  # Isolate
+        ("2_oxidizing", "6"): (False, 10.0),  # Segregate at least 3m
+        ("2_oxidizing", "8"): (False, 10.0),  # Segregate at least 3m
+        
+        # Flammable Liquid (Class 3)
+        ("3", "3"): (False, 3.0),  # Same type
+        ("3", "4"): (False, 5.0),  # OK to store together
+        ("3", "5.1"): (False, 10.0),  # Segregate at least 3m
+        ("3", "5.2"): (True, float('inf')),  # Isolate
+        ("3", "6"): (False, 10.0),  # Segregate at least 3m
+        ("3", "8"): (False, 10.0),  # Segregate at least 3m
+        
+        # Flammable Solid (Class 4)
+        ("4", "4"): (False, 3.0),  # Same type
+        ("4", "5.1"): (False, 10.0),  # Segregate at least 3m
+        ("4", "5.2"): (True, float('inf')),  # Isolate
+        ("4", "6"): (False, 10.0),  # Segregate at least 3m
+        ("4", "8"): (False, 10.0),  # Segregate at least 3m
+        
+        # Oxidizing Agent (Class 5.1)
+        ("5.1", "5.1"): (False, 3.0),  # Same type
+        ("5.1", "5.2"): (True, float('inf')),  # Isolate
+        ("5.1", "6"): (False, 10.0),  # Segregate at least 3m
+        ("5.1", "8"): (False, 10.0),  # Segregate at least 3m
+        
+        # Organic Peroxide (Class 5.2) - ISOLATE from all except Corrosive
+        ("5.2", "5.2"): (False, 3.0),  # Same type
+        ("5.2", "6"): (True, float('inf')),  # Isolate
+        ("5.2", "8"): (False, 5.0),  # OK to store together
+        
+        # Toxic (Class 6)
+        ("6", "6"): (False, 3.0),  # Same type
+        ("6", "8"): (False, 5.0),  # OK to store together
+        
+        # Corrosive (Class 8)
+        ("8", "8"): (False, 3.0),  # Same type
+    }    
+
+    # Convert hazard names to class codes for lookup
+    name_to_class = {
+        "Flammable Gas": "2_flammable",
+        "Non-Flammable Non-Toxic Gas": "2_nonflammable", 
+        "Toxic Gas": "2_toxic",
+        "Oxidizing Gas": "2_oxidizing",
+        "Flammable Liquid": "3",
+        "Flammable Solid": "4",
+        "Spontaneously Combustible": "4",  # Treat as Class 4
+        "Dangerous When Wet": "4",  # Treat as Class 4
+        "Oxidizing Agent": "5.1",
+        "Organic Peroxide": "5.2",
+        "Toxic": "6",
+        "Corrosive": "8"
     }
     
-    # Special combinations that must be completely isolated (never together)
-    isolated_pairs = {
-        ('GHS01', 'GHS02'),  # Explosive + Flammable - MUST be isolated
-        ('GHS01', 'GHS03'),  # Explosive + Oxidizing - MUST be isolated
-    }
+    # Get class codes
+    class_code_a = name_to_class.get(class_a, class_a)
+    class_code_b = name_to_class.get(class_b, class_b)
     
-    # Normalize pair order for lookup
-    pair = tuple(sorted([ghs_a_code, ghs_b_code]))
-    
-    # Same hazard type - can be together with minimal separation
-    if ghs_a_code == ghs_b_code:
+    # Same hazard type
+    if class_code_a == class_code_b:
         min_distance = 3.0
         if distance >= min_distance:
-            return "safe", False, min_distance  # Not isolated, same type
+            return "safe", False, min_distance
         else:
             return "danger", False, min_distance
     
-    # Check if pair must be completely isolated (never together)
-    if pair in isolated_pairs:
-        return "danger", True, float('inf')  # Must be isolated, infinite distance required
+    # Look up compatibility (normalize pair order)
+    pair_key = tuple(sorted([class_code_a, class_code_b]))
+    compatibility = compatibility_matrix.get(pair_key)
     
-    # Check if pair requires special separation distance
-    if pair in incompatible_pairs:
-        min_distance = incompatible_pairs[pair]
-        is_isolated = False  # Can be together with proper distance
-        
-        if distance >= min_distance:
-            return "safe", is_isolated, min_distance
-        elif distance >= min_distance * 0.6:  # 60% of required distance
-            return "caution", is_isolated, min_distance
-        else:
-            return "danger", is_isolated, min_distance
-    
-    # Compatible pairs - standard safety distances
-    min_distance = 5.0  # Standard minimum for compatible materials
-    
-    if distance >= min_distance:
-        return "safe", False, min_distance  # Not isolated, compatible
-    elif distance >= min_distance * 0.6:  # 3m for compatible
-        return "caution", False, min_distance
+    if not compatibility:
+        # Default for unknown pairs
+        min_distance = 5.0
+        is_isolated = False
     else:
-        return "danger", False, min_distance
+        is_isolated, min_distance = compatibility
+    
+    # Check if pair must be isolated
+    if is_isolated:
+        return "danger", True, min_distance
+    
+    # Check distance requirements
+    if distance >= min_distance:
+        return "safe", is_isolated, min_distance
+    elif distance >= min_distance * 0.6:  # 60% of required distance
+        return "caution", is_isolated, min_distance
+    else:
+        return "danger", is_isolated, min_distance
 
 # Routes
 @app.get("/")
 def read_root():
     return {"message": "Kinross Chemical Container Safety API", "status": "running"}
 
-@app.get("/ghs-categories/", response_model=List[GHSCategoryResponse])
-def get_ghs_categories():
-    """Get all GHS categories with their logos"""
+@app.get("/hazard-categories/", response_model=List[HazardCategoryResponse])
+def get_hazard_categories():
+    """Get all hazard categories"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    cursor.execute("SELECT id, name, symbol_code, description, logo_path FROM ghs_categories ORDER BY symbol_code")
+    cursor.execute("SELECT id, name, hazard_class, subclass, description, logo_path FROM hazard_categories ORDER BY hazard_class, name")
     categories = []
     
     for row in cursor.fetchall():
-        categories.append(GHSCategoryResponse(
+        categories.append(HazardCategoryResponse(
             id=row['id'],
             name=row['name'],
-            symbol_code=row['symbol_code'],
+            hazard_class=row['hazard_class'],
+            subclass=row['subclass'],
             description=row['description'],
             logo_path=row['logo_path']
         ))
@@ -291,10 +382,10 @@ def submit_container(submission: ContainerSubmission):
     try:
         print(f"📝 Submitting container: {submission.department} - {submission.location}")
         print(f"🚛 Container: {submission.container} ({submission.container_type})")
-        print(f"🧪 Selected hazards: {submission.selected_hazards}")
+        print(f"⚠️  Selected hazards: {submission.selected_hazards}")
         print(f"📏 Hazard pairs: {len(submission.hazard_pairs)}")
         
-        # Create container record with all required fields
+        # Create container record
         cursor.execute("""
             INSERT INTO containers (department, location, submitted_by, container, container_type)
             VALUES (?, ?, ?, ?, ?)
@@ -306,54 +397,42 @@ def submit_container(submission: ContainerSubmission):
         
         # Add selected hazards
         for hazard_id in submission.selected_hazards:
-            print(f"🔗 Linking hazard {hazard_id} to container {container_id}")
             cursor.execute("""
-                INSERT INTO container_hazards (container_id, ghs_category_id)
+                INSERT INTO container_hazards (container_id, hazard_category_id)
                 VALUES (?, ?)
             """, (container_id, hazard_id))
         
-        # Add hazard pairs with distances and status (only if pairs exist)
+        # Add hazard pairs with distances and status
         if submission.hazard_pairs:
-            for i, pair_data in enumerate(submission.hazard_pairs):
-                print(f"📊 Processing pair {i+1}/{len(submission.hazard_pairs)}: {pair_data.ghs_category_a_id} ↔ {pair_data.ghs_category_b_id}")
+            for pair_data in submission.hazard_pairs:
+                # Get hazard category names for status calculation
+                cursor.execute("SELECT name FROM hazard_categories WHERE id = ?", (pair_data.hazard_category_a_id,))
+                hazard_a_row = cursor.fetchone()
                 
-                # Get GHS category codes for status calculation
-                cursor.execute("SELECT symbol_code FROM ghs_categories WHERE id = ?", (pair_data.ghs_category_a_id,))
-                ghs_a_row = cursor.fetchone()
+                cursor.execute("SELECT name FROM hazard_categories WHERE id = ?", (pair_data.hazard_category_b_id,))
+                hazard_b_row = cursor.fetchone()
                 
-                cursor.execute("SELECT symbol_code FROM ghs_categories WHERE id = ?", (pair_data.ghs_category_b_id,))
-                ghs_b_row = cursor.fetchone()
-                
-                if not ghs_a_row or not ghs_b_row:
-                    error_msg = f"Invalid GHS category ID: {pair_data.ghs_category_a_id} or {pair_data.ghs_category_b_id}"
-                    print(f"❌ {error_msg}")
-                    raise HTTPException(status_code=400, detail=error_msg)
-                
-                print(f"🏷️  Categories: {ghs_a_row['symbol_code']} + {ghs_b_row['symbol_code']}, Distance: {pair_data.distance}m")
+                if not hazard_a_row or not hazard_b_row:
+                    raise HTTPException(status_code=400, detail=f"Invalid hazard category ID")
                 
                 # Calculate status, isolation, and minimum distance
                 status, is_isolated, min_required_distance = calculate_hazard_status(
-                    ghs_a_row['symbol_code'], 
-                    ghs_b_row['symbol_code'], 
+                    hazard_a_row['name'], 
+                    hazard_b_row['name'], 
                     pair_data.distance
                 )
                 
-                print(f"📈 Calculated: Status={status}, Isolated={is_isolated}, MinDist={min_required_distance}")
-                
-                # Check if min_required_distance is infinity
+                # Handle infinity distance
                 min_dist_value = None if min_required_distance == float('inf') else min_required_distance
                 
                 cursor.execute("""
-                    INSERT INTO hazard_pairs (container_id, ghs_category_a_id, ghs_category_b_id, 
+                    INSERT INTO hazard_pairs (container_id, hazard_category_a_id, hazard_category_b_id, 
                                             distance, is_isolated, min_required_distance, status)
                     VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (container_id, pair_data.ghs_category_a_id, pair_data.ghs_category_b_id, 
+                """, (container_id, pair_data.hazard_category_a_id, pair_data.hazard_category_b_id, 
                       pair_data.distance, is_isolated, min_dist_value, status))
-        else:
-            print("📝 Single hazard container - no pairs to process")
         
         conn.commit()
-        print(f"✅ Successfully saved container {container_id} with {len(submission.hazard_pairs)} pairs")
         
         return {
             "message": "Container safety assessment submitted successfully",
@@ -368,9 +447,6 @@ def submit_container(submission: ContainerSubmission):
     except Exception as e:
         conn.rollback()
         print(f"❌ Error saving container data: {str(e)}")
-        print(f"📋 Submission data: {submission}")
-        import traceback
-        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error saving container data: {str(e)}")
     finally:
         conn.close()
@@ -390,35 +466,34 @@ def get_containers():
         
         # Get hazards for this container
         cursor.execute("""
-            SELECT g.name, g.symbol_code 
-            FROM ghs_categories g
-            JOIN container_hazards ch ON g.id = ch.ghs_category_id
+            SELECT h.name, h.hazard_class 
+            FROM hazard_categories h
+            JOIN container_hazards ch ON h.id = ch.hazard_category_id
             WHERE ch.container_id = ?
         """, (container_id,))
-        hazards = [{"name": row['name'], "symbol_code": row['symbol_code']} for row in cursor.fetchall()]
+        hazards = [{"name": row['name'], "hazard_class": row['hazard_class']} for row in cursor.fetchall()]
         
         # Get pairs for this container
         cursor.execute("""
             SELECT hp.*, 
-                   ga.name as ghs_a_name, 
-                   gb.name as ghs_b_name
+                   ha.name as hazard_a_name, 
+                   hb.name as hazard_b_name
             FROM hazard_pairs hp
-            JOIN ghs_categories ga ON hp.ghs_category_a_id = ga.id
-            JOIN ghs_categories gb ON hp.ghs_category_b_id = gb.id
+            JOIN hazard_categories ha ON hp.hazard_category_a_id = ha.id
+            JOIN hazard_categories hb ON hp.hazard_category_b_id = hb.id
             WHERE hp.container_id = ?
         """, (container_id,))
         
         pairs = []
         for pair_row in cursor.fetchall():
-            # Handle NULL min_required_distance (when it was infinity)
             min_dist = pair_row['min_required_distance']
             if min_dist is None:
                 min_dist = float('inf')
             
             pairs.append({
                 "id": pair_row['id'],
-                "ghs_a_name": pair_row['ghs_a_name'],
-                "ghs_b_name": pair_row['ghs_b_name'],
+                "hazard_a_name": pair_row['hazard_a_name'],
+                "hazard_b_name": pair_row['hazard_b_name'],
                 "distance": pair_row['distance'],
                 "is_isolated": bool(pair_row['is_isolated']),
                 "min_required_distance": min_dist,
@@ -441,26 +516,26 @@ def get_containers():
     return containers
 
 @app.post("/preview-status/")
-def get_preview_status(ghs_a_id: int, ghs_b_id: int, distance: float):
+def get_preview_status(hazard_a_id: int, hazard_b_id: int, distance: float):
     """Get real-time status preview for a hazard pair"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
-        # Get GHS category codes
-        cursor.execute("SELECT symbol_code FROM ghs_categories WHERE id = ?", (ghs_a_id,))
-        ghs_a_row = cursor.fetchone()
+        # Get hazard category names
+        cursor.execute("SELECT name FROM hazard_categories WHERE id = ?", (hazard_a_id,))
+        hazard_a_row = cursor.fetchone()
         
-        cursor.execute("SELECT symbol_code FROM ghs_categories WHERE id = ?", (ghs_b_id,))
-        ghs_b_row = cursor.fetchone()
+        cursor.execute("SELECT name FROM hazard_categories WHERE id = ?", (hazard_b_id,))
+        hazard_b_row = cursor.fetchone()
         
-        if not ghs_a_row or not ghs_b_row:
-            raise HTTPException(status_code=400, detail="Invalid GHS category ID")
+        if not hazard_a_row or not hazard_b_row:
+            raise HTTPException(status_code=400, detail="Invalid hazard category ID")
         
-        # Calculate status using the same backend logic
+        # Calculate status using the backend logic
         status, is_isolated, min_required_distance = calculate_hazard_status(
-            ghs_a_row['symbol_code'], 
-            ghs_b_row['symbol_code'], 
+            hazard_a_row['name'], 
+            hazard_b_row['name'], 
             distance
         )
         
@@ -482,7 +557,7 @@ def health_check():
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        cursor.execute("SELECT COUNT(*) FROM ghs_categories")
+        cursor.execute("SELECT COUNT(*) FROM hazard_categories")
         categories_count = cursor.fetchone()[0]
         
         cursor.execute("SELECT COUNT(*) FROM containers")
@@ -497,7 +572,7 @@ def health_check():
             "status": "healthy",
             "database": "sqlite",
             "stats": {
-                "ghs_categories": categories_count,
+                "hazard_categories": categories_count,
                 "containers": containers_count,
                 "hazard_pairs": pairs_count
             }
@@ -510,7 +585,7 @@ def health_check():
 async def startup_event():
     init_database()
     print("🚀 Kinross Chemical Container Safety API started")
-    print("📊 Database initialized")
+    print("📊 Database initialized with new hazard classification system")
     print("🔗 API Documentation: http://localhost:8000/docs")
 
 if __name__ == "__main__":
