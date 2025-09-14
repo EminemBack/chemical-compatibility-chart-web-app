@@ -357,7 +357,7 @@ def get_hazard_categories():
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    cursor.execute("SELECT id, name, hazard_class, subclass, description, logo_path FROM hazard_categories ORDER BY hazard_class, name")
+    cursor.execute("SELECT id, name, hazard_class, subclass, description, logo_path FROM hazard_categories") # ORDER BY hazard_class, name")
     categories = []
     
     for row in cursor.fetchall():

@@ -1,17 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
 
-interface GHSCategory {
+interface HazardCategory {
   id: number;
   name: string;
-  symbol_code: string;
+  hazard_class: string;
+  subclass?: string;
   description?: string;
   logo_path?: string;
 }
 
 interface HazardPairData {
-  ghs_category_a_id: number;
-  ghs_category_b_id: number;
+  hazard_category_a_id: number;
+  hazard_category_b_id: number;
   distance: number;
 }
 
@@ -23,11 +24,11 @@ interface ContainerData {
   container: string;
   container_type: string;
   submitted_at: string;
-  hazards: Array<{name: string, symbol_code: string}>;
+  hazards: Array<{name: string, hazard_class: string}>;
   pairs: Array<{
     id: number;
-    ghs_a_name: string;
-    ghs_b_name: string;
+    hazard_a_name: string;
+    hazard_b_name: string;
     distance: number;
     is_isolated: boolean;
     min_required_distance: number;
@@ -36,8 +37,8 @@ interface ContainerData {
 }
 
 interface MatrixCell {
-  ghs_a_id: number;
-  ghs_b_id: number;
+  hazard_a_id: number;
+  hazard_b_id: number;
   status: string;
   is_isolated: boolean;
   min_required_distance: number | null;
@@ -48,8 +49,8 @@ const API_BASE = 'http://localhost:8000';
 
 // Popup Compatibility Matrix Component
 const PopupCompatibilityMatrix: React.FC<{
-  selectedHazards: GHSCategory[];
-  allHazards: GHSCategory[];
+  selectedHazards: HazardCategory[];
+  allHazards: HazardCategory[];
   isOpen: boolean;
   onClose: () => void;
 }> = ({ selectedHazards, allHazards, isOpen, onClose }) => {
@@ -66,14 +67,14 @@ const PopupCompatibilityMatrix: React.FC<{
     setLoading(true);
     const data: MatrixCell[] = [];
 
-    // Generate matrix for all selected hazards vs all GHS categories
+    // Generate matrix for all selected hazards vs all hazard categories
     for (const selectedHazard of selectedHazards) {
       for (const otherHazard of allHazards) {
         if (otherHazard.id === selectedHazard.id) {
           // Same hazard
           data.push({
-            ghs_a_id: selectedHazard.id,
-            ghs_b_id: otherHazard.id,
+            hazard_a_id: selectedHazard.id,
+            hazard_b_id: otherHazard.id,
             status: 'safe',
             is_isolated: false,
             min_required_distance: 3.0,
@@ -82,7 +83,7 @@ const PopupCompatibilityMatrix: React.FC<{
         } else {
           try {
             const response = await fetch(
-              `${API_BASE}/preview-status/?ghs_a_id=${selectedHazard.id}&ghs_b_id=${otherHazard.id}&distance=0`,
+              `${API_BASE}/preview-status/?hazard_a_id=${selectedHazard.id}&hazard_b_id=${otherHazard.id}&distance=0`,
               { method: 'POST' }
             );
             
@@ -99,8 +100,8 @@ const PopupCompatibilityMatrix: React.FC<{
               }
 
               data.push({
-                ghs_a_id: selectedHazard.id,
-                ghs_b_id: otherHazard.id,
+                hazard_a_id: selectedHazard.id,
+                hazard_b_id: otherHazard.id,
                 status: statusData.status,
                 is_isolated: statusData.is_isolated,
                 min_required_distance: statusData.min_required_distance,
@@ -110,8 +111,8 @@ const PopupCompatibilityMatrix: React.FC<{
           } catch (error) {
             console.error('Error fetching compatibility data:', error);
             data.push({
-              ghs_a_id: selectedHazard.id,
-              ghs_b_id: otherHazard.id,
+              hazard_a_id: selectedHazard.id,
+              hazard_b_id: otherHazard.id,
               status: 'unknown',
               is_isolated: false,
               min_required_distance: null,
@@ -127,7 +128,7 @@ const PopupCompatibilityMatrix: React.FC<{
   };
 
   const getCompatibilityColor = (cell: MatrixCell) => {
-    if (cell.ghs_a_id === cell.ghs_b_id) {
+    if (cell.hazard_a_id === cell.hazard_b_id) {
       return { backgroundColor: '#E3F2FD', borderColor: '#2196F3', textColor: '#1565C0' };
     }
     
@@ -164,7 +165,7 @@ const PopupCompatibilityMatrix: React.FC<{
 
   const getCellData = (selectedHazardId: number, otherHazardId: number) => {
     return matrixData.find(cell => 
-      cell.ghs_a_id === selectedHazardId && cell.ghs_b_id === otherHazardId
+      cell.hazard_a_id === selectedHazardId && cell.hazard_b_id === otherHazardId
     );
   };
 
@@ -175,8 +176,8 @@ const PopupCompatibilityMatrix: React.FC<{
       <div className="matrix-popup-modal" onClick={(e) => e.stopPropagation()}>
         {/* Modal Header */}
         <div className="matrix-popup-header">
-          <h2>🧪 Complete GHS Compatibility Matrix</h2>
-          <p>Selected hazards vs all GHS categories compatibility analysis</p>
+          <h2>⚠️ Complete Hazard Compatibility Matrix</h2>
+          <p>Selected hazards vs all hazard categories compatibility analysis</p>
           <button className="matrix-popup-close" onClick={onClose} aria-label="Close matrix">
             ✕
           </button>
@@ -216,13 +217,13 @@ const PopupCompatibilityMatrix: React.FC<{
                         <div className="corner-content">
                           <span className="corner-selected">Selected</span>
                           <span className="corner-vs">vs</span>
-                          <span className="corner-all">All GHS</span>
+                          <span className="corner-all">All Hazards</span>
                         </div>
                       </th>
                       {allHazards.map(hazard => (
                         <th key={hazard.id} className="matrix-popup-column-header">
                           <div className="header-content">
-                            <div className="hazard-code">{hazard.symbol_code}</div>
+                            <div className="hazard-code">Class {hazard.hazard_class}</div>
                             <div className="hazard-name">{hazard.name}</div>
                           </div>
                         </th>
@@ -237,7 +238,7 @@ const PopupCompatibilityMatrix: React.FC<{
                         {/* Row Header */}
                         <td className="matrix-popup-row-header">
                           <div className="row-header-content">
-                            <div className="hazard-code">{selectedHazard.symbol_code}</div>
+                            <div className="hazard-code">Class {selectedHazard.hazard_class}</div>
                             <div className="hazard-name">{selectedHazard.name}</div>
                           </div>
                         </td>
@@ -248,7 +249,7 @@ const PopupCompatibilityMatrix: React.FC<{
                           if (!cell) return <td key={otherHazard.id} className="matrix-empty-cell">-</td>;
 
                           const colors = getCompatibilityColor(cell);
-                          const isSelectedHazard = cell.ghs_a_id === cell.ghs_b_id;
+                          const isSelectedHazard = cell.hazard_a_id === cell.hazard_b_id;
 
                           return (
                             <td 
@@ -312,7 +313,7 @@ const PopupCompatibilityMatrix: React.FC<{
                 </div>
 
                 <div className="matrix-info">
-                  <p><strong>Selected Hazards:</strong> {selectedHazards.map(h => h.symbol_code).join(', ')}</p>
+                  <p><strong>Selected Hazards:</strong> {selectedHazards.map(h => `Class ${h.hazard_class} (${h.name})`).join(', ')}</p>
                   <p><strong>Total Relationships:</strong> {matrixData.length} compatibility assessments</p>
                 </div>
               </div>
@@ -326,8 +327,8 @@ const PopupCompatibilityMatrix: React.FC<{
 
 // Matrix Button Component
 const MatrixPopupButton: React.FC<{
-  selectedHazards: GHSCategory[];
-  allHazards: GHSCategory[];
+  selectedHazards: HazardCategory[];
+  allHazards: HazardCategory[];
 }> = ({ selectedHazards, allHazards }) => {
   const [isMatrixOpen, setIsMatrixOpen] = useState(false);
 
@@ -344,7 +345,7 @@ const MatrixPopupButton: React.FC<{
           className="matrix-popup-trigger-btn"
           onClick={() => setIsMatrixOpen(true)}
         >
-          <span className="btn-icon">🧪</span>
+          <span className="btn-icon">⚠️</span>
           <span className="btn-text">View Compatibility Matrix</span>
           <span className="btn-count">({selectedHazards.length} hazards)</span>
         </button>
@@ -361,8 +362,8 @@ const MatrixPopupButton: React.FC<{
 };
 
 function App() {
-  const [ghsCategories, setGhsCategories] = useState<GHSCategory[]>([]);
-  const [selectedHazards, setSelectedHazards] = useState<GHSCategory[]>([]);
+  const [hazardCategories, setHazardCategories] = useState<HazardCategory[]>([]);
+  const [selectedHazards, setSelectedHazards] = useState<HazardCategory[]>([]);
   const [department, setDepartment] = useState('');
   const [location, setLocation] = useState('');
   const [submittedBy, setSubmittedBy] = useState('');
@@ -375,17 +376,17 @@ function App() {
   const [pairStatuses, setPairStatuses] = useState<{[key: string]: any}>({});
 
   useEffect(() => {
-    fetchGHSCategories();
+    fetchHazardCategories();
     fetchContainers();
   }, []);
 
-  const fetchGHSCategories = async () => {
+  const fetchHazardCategories = async () => {
     try {
-      const response = await fetch(`${API_BASE}/ghs-categories/`);
+      const response = await fetch(`${API_BASE}/hazard-categories/`);
       const data = await response.json();
-      setGhsCategories(data);
+      setHazardCategories(data);
     } catch (error) {
-      console.error('Error fetching GHS categories:', error);
+      console.error('Error fetching hazard categories:', error);
     }
   };
 
@@ -399,10 +400,10 @@ function App() {
     }
   };
 
-  // API call to get real-time status (eliminates code duplication)
-  const getPreviewStatus = async (ghs_a_id: number, ghs_b_id: number, distance: number) => {
+  // API call to get real-time status
+  const getPreviewStatus = async (hazard_a_id: number, hazard_b_id: number, distance: number) => {
     try {
-      const response = await fetch(`${API_BASE}/preview-status/?ghs_a_id=${ghs_a_id}&ghs_b_id=${ghs_b_id}&distance=${distance}`, {
+      const response = await fetch(`${API_BASE}/preview-status/?hazard_a_id=${hazard_a_id}&hazard_b_id=${hazard_b_id}&distance=${distance}`, {
         method: 'POST'
       });
       if (response.ok) {
@@ -414,22 +415,22 @@ function App() {
     return { status: "unknown", is_isolated: false, min_required_distance: 0 };
   };
 
-  const generateHazardPairs = async (hazards: GHSCategory[]) => {
+  const generateHazardPairs = async (hazards: HazardCategory[]) => {
     const pairs: HazardPairData[] = [];
     const newPairStatuses: {[key: string]: any} = {};
     
     for (let i = 0; i < hazards.length; i++) {
       for (let j = i + 1; j < hazards.length; j++) {
         const pair = {
-          ghs_category_a_id: hazards[i].id,
-          ghs_category_b_id: hazards[j].id,
+          hazard_category_a_id: hazards[i].id,
+          hazard_category_b_id: hazards[j].id,
           distance: 0
         };
         pairs.push(pair);
         
-        // Automatically get status for each pair with 0 distance
-        const status = await getPreviewStatus(pair.ghs_category_a_id, pair.ghs_category_b_id, 0);
-        const pairKey = `${pair.ghs_category_a_id}-${pair.ghs_category_b_id}`;
+        // Get status for each pair with 0 distance
+        const status = await getPreviewStatus(pair.hazard_category_a_id, pair.hazard_category_b_id, 0);
+        const pairKey = `${pair.hazard_category_a_id}-${pair.hazard_category_b_id}`;
         newPairStatuses[pairKey] = status;
       }
     }
@@ -438,9 +439,9 @@ function App() {
     setPairStatuses(newPairStatuses);
   };
 
-  const handleHazardSelect = async (category: GHSCategory) => {
+  const handleHazardSelect = async (category: HazardCategory) => {
     const isSelected = selectedHazards.find(h => h.id === category.id);
-    let newSelected: GHSCategory[];
+    let newSelected: HazardCategory[];
     
     if (isSelected) {
       newSelected = selectedHazards.filter(h => h.id !== category.id);
@@ -459,13 +460,13 @@ function App() {
     
     // Get real-time status from backend
     const pair = updatedPairs[index];
-    const status = await getPreviewStatus(pair.ghs_category_a_id, pair.ghs_category_b_id, distance);
-    const pairKey = `${pair.ghs_category_a_id}-${pair.ghs_category_b_id}`;
+    const status = await getPreviewStatus(pair.hazard_category_a_id, pair.hazard_category_b_id, distance);
+    const pairKey = `${pair.hazard_category_a_id}-${pair.hazard_category_b_id}`;
     setPairStatuses(prev => ({ ...prev, [pairKey]: status }));
   };
 
   const getHazardName = (id: number) => {
-    return ghsCategories.find(g => g.id === id)?.name || `Hazard ${id}`;
+    return hazardCategories.find(h => h.id === id)?.name || `Hazard ${id}`;
   };
 
   const getIsolationStatus = (is_isolated: boolean, min_required_distance: number) => {
@@ -504,12 +505,6 @@ function App() {
       return;
     }
     
-    if (hazardPairs.length === 0 && selectedHazards.length > 1) {
-      alert('No hazard pairs to evaluate');
-      return;
-    }
-
-    // Allow submission with single hazard (no pairs needed)
     if (selectedHazards.length === 0) {
       alert('Please select at least one hazard category');
       return;
@@ -575,7 +570,7 @@ function App() {
     <div className="App">
       <header className="app-header">
         <h1>Chemical Container Safety Assessment</h1>
-        <p className="kinross-subtitle">Kinross Gold Corporation - GHS Hazard Compatibility System</p>
+        <p className="kinross-subtitle">Kinross Gold Corporation - DOT Hazard Class Compatibility System</p>
         <nav>
           <button 
             className={activeTab === 'form' ? 'active' : ''}
@@ -669,11 +664,11 @@ function App() {
               </div>
             </div>
 
-            {/* GHS Hazard Selection */}
+            {/* Hazard Selection */}
             <div className="hazard-selection">
-              <h3>Select GHS Hazard Categories Present in Container</h3>
+              <h3>Select DOT Hazard Classes Present in Container</h3>
               <div className="ghs-grid">
-                {ghsCategories.map(category => (
+                {hazardCategories.map(category => (
                   <div
                     key={category.id}
                     className={`ghs-card ${selectedHazards.find(h => h.id === category.id) ? 'selected' : ''}`}
@@ -686,10 +681,10 @@ function App() {
                         className="ghs-logo"
                       />
                     ) : (
-                      <div className="ghs-symbol">{category.symbol_code}</div>
+                      <div className="ghs-symbol">Class {category.hazard_class}</div>
                     )}
                     <div className="ghs-name">{category.name}</div>
-                    <div className="ghs-code">{category.symbol_code}</div>
+                    <div className="ghs-code">Class {category.hazard_class}{category.subclass ? `.${category.subclass}` : ''}</div>
                     {category.description && (
                       <div className="ghs-description">{category.description}</div>
                     )}
@@ -698,10 +693,10 @@ function App() {
               </div>
             </div>
 
-            {/* NEW: Matrix Popup Button - Shows for ANY selected hazards */}
+            {/* Matrix Popup Button */}
             <MatrixPopupButton
               selectedHazards={selectedHazards}
-              allHazards={ghsCategories}
+              allHazards={hazardCategories}
             />
 
             {/* Hazard Pairs Assessment */}
@@ -714,7 +709,7 @@ function App() {
                 <div className="pairs-list">
                   {hazardPairs.map((pair, index) => {
                     // Get real-time status from backend API call
-                    const pairKey = `${pair.ghs_category_a_id}-${pair.ghs_category_b_id}`;
+                    const pairKey = `${pair.hazard_category_a_id}-${pair.hazard_category_b_id}`;
                     const previewStatus = pairStatuses[pairKey] || { status: "unknown", is_isolated: false, min_required_distance: 0 };
                     const isolationStatus = getIsolationStatus(previewStatus.is_isolated, previewStatus.min_required_distance);
                     
@@ -722,11 +717,11 @@ function App() {
                       <div key={index} className="pair-assessment-item" style={getStatusColor(previewStatus.status)}>
                         <div className="pair-hazards">
                           <div className="hazard-item">
-                            <strong>{getHazardName(pair.ghs_category_a_id)}</strong>
+                            <strong>{getHazardName(pair.hazard_category_a_id)}</strong>
                           </div>
                           <div className="separator">↔</div>
                           <div className="hazard-item">
-                            <strong>{getHazardName(pair.ghs_category_b_id)}</strong>
+                            <strong>{getHazardName(pair.hazard_category_b_id)}</strong>
                           </div>
                         </div>
                         
@@ -775,7 +770,7 @@ function App() {
               </div>
             )}
 
-            {/* Submit Section - Always show when hazards are selected */}
+            {/* Submit Section */}
             {selectedHazards.length > 0 && (
               <div className="submit-section-bottom">
                 {hazardPairs.length === 0 && selectedHazards.length === 1 && (
@@ -831,7 +826,7 @@ function App() {
                       <div className="hazard-tags">
                         {container.hazards.map((hazard, idx) => (
                           <span key={idx} className="hazard-tag">
-                            {hazard.symbol_code} - {hazard.name}
+                            Class {hazard.hazard_class} - {hazard.name}
                           </span>
                         ))}
                       </div>
@@ -850,9 +845,9 @@ function App() {
                             return (
                               <div key={pair.id} className="pair-result" style={getStatusColor(pair.status)}>
                                 <div className="pair-names">
-                                  <span>{pair.ghs_a_name}</span>
+                                  <span>{pair.hazard_a_name}</span>
                                   <span className="separator">↔</span>
-                                  <span>{pair.ghs_b_name}</span>
+                                  <span>{pair.hazard_b_name}</span>
                                 </div>
                                 <div className="pair-details">
                                   <span><strong>Actual:</strong> {pair.distance}m</span>
