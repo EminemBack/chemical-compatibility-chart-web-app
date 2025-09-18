@@ -70,17 +70,17 @@ const PopupCompatibilityMatrix: React.FC<{
     // Generate matrix for all selected hazards vs all hazard categories
     for (const selectedHazard of selectedHazards) {
       for (const otherHazard of allHazards) {
-        if (otherHazard.id === selectedHazard.id) {
+        // if (otherHazard.id === selectedHazard.id) {
           // Same hazard
-          data.push({
-            hazard_a_id: selectedHazard.id,
-            hazard_b_id: otherHazard.id,
-            status: 'safe',
-            is_isolated: false,
-            min_required_distance: 3.0,
-            compatibility_type: 'SAME TYPE'
-          });
-        } else {
+          // data.push({
+          //   hazard_a_id: selectedHazard.id,
+          //   hazard_b_id: otherHazard.id,
+          //   status: 'safe',
+          //   is_isolated: false,
+          //   min_required_distance: 3.0,
+          //   compatibility_type: 'SAME TYPE'
+          // });
+        // } else {
           try {
             const response = await fetch(
               `${API_BASE}/preview-status/?hazard_a_id=${selectedHazard.id}&hazard_b_id=${otherHazard.id}&distance=0`,
@@ -95,8 +95,11 @@ const PopupCompatibilityMatrix: React.FC<{
                 compatibilityType = 'MUST BE ISOLATED';
               } else if (statusData.min_required_distance >= 20) {
                 compatibilityType = 'INCOMPATIBLE';
-              } else if (statusData.min_required_distance === 3) {
+              } else if (selectedHazard.id === otherHazard.id) {
                 compatibilityType = 'SAME TYPE';
+              } 
+              else if (statusData.min_required_distance < 3) {
+                compatibilityType = 'OK';
               }
 
               data.push({
@@ -119,7 +122,7 @@ const PopupCompatibilityMatrix: React.FC<{
               compatibility_type: 'UNKNOWN'
             });
           }
-        }
+        // }
       }
     }
 
@@ -159,6 +162,7 @@ const PopupCompatibilityMatrix: React.FC<{
       case 'INCOMPATIBLE': return '⚠️';
       case 'SAME TYPE': return '🔄';
       case 'COMPATIBLE': return '✅';
+      case 'OK': return '✅';
       default: return '❓';
     }
   };
@@ -684,7 +688,7 @@ function App() {
                       <div className="ghs-symbol">Class {category.hazard_class}</div>
                     )}
                     <div className="ghs-name">{category.name}</div>
-                    <div className="ghs-code">Class {category.hazard_class}{category.subclass ? `.${category.subclass}` : ''}</div>
+                    <div className="ghs-code">Class {category.subclass}</div>
                     {category.description && (
                       <div className="ghs-description">{category.description}</div>
                     )}

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Updated Chemical Container Safety Assessment API
-With new hazard categories based on DOT classification system
+With corrected hazard categories and compatibility matrix
 """
 
 from fastapi import FastAPI, HTTPException, Depends
@@ -65,7 +65,7 @@ def get_db_connection():
     return conn
 
 def init_database():
-    """Initialize database with new hazard categories"""
+    """Initialize database with updated hazard categories"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
@@ -136,7 +136,7 @@ def init_database():
             )
         """)
     
-    # Create container_hazards table (updated foreign key) - only if not already created above
+    # Create container_hazards table (updated foreign key)
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='container_hazards'")
     if not cursor.fetchone():
         cursor.execute("""
@@ -149,7 +149,7 @@ def init_database():
             )
         """)
     
-    # Create hazard_pairs table (updated foreign keys) - only if not already created above
+    # Create hazard_pairs table (updated foreign keys)
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='hazard_pairs'")
     if not cursor.fetchone():
         cursor.execute("""
@@ -169,42 +169,33 @@ def init_database():
             )
         """)
     
-    # Drop old GHS tables if they exist and migrate data
-    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='ghs_categories'")
-    old_table_exists = cursor.fetchone()
+    # Drop and recreate hazard categories with updated classification
+    cursor.execute("DELETE FROM hazard_categories")
     
-    if old_table_exists:
-        print("🔄 Migrating from old GHS system to new hazard classification...")
-        cursor.execute("DROP TABLE IF EXISTS ghs_categories")
-        cursor.execute("DROP TABLE IF EXISTS container_hazards")  # Will be recreated
-        cursor.execute("DROP TABLE IF EXISTS hazard_pairs")  # Will be recreated
-        print("✅ Old tables cleaned up")
+    # Updated hazard categories based on your requirements:
+    # - Removed Oxidizing Gas
+    # - Updated Gas subclasses to 2.1, 2.2, 2.3
+    # - Updated Class 4 subclasses to 4.1, 4.2, 4.3
+    hazard_categories = [
+        ("Flammable Gas", "2", "2.1", "Gases which are flammable in air", "/uploads/hazard/class2_flammable_gas.png"),
+        ("Non-Flammable Non-Toxic Gas", "2", "2.2", "Gases which are not flammable and not toxic", "/uploads/hazard/class2_nonflammable_gas.png"),
+        ("Toxic Gas", "2", "2.3", "Gases which are known to be toxic or corrosive to humans", "/uploads/hazard/class2_toxic_gas.png"),
+        ("Flammable Liquid", "3", "3", "Liquids having a flash point not more than 60°C", "/uploads/hazard/class3_flammable_liquid.png"),
+        ("Flammable Solid", "4", "4.1", "Solid materials which can be readily ignited", "/uploads/hazard/class4_flammable_solid.png"),
+        ("Spontaneously Combustible", "4", "4.2", "Substances liable to spontaneous combustion", "/uploads/hazard/class4_spontaneously_combustible.png"),
+        ("Dangerous When Wet", "4", "4.3", "Substances which become spontaneously flammable when wet", "/uploads/hazard/class4_dangerous_when_wet.png"),
+        ("Oxidizing Agent", "5", "5.1", "Substances which yield oxygen readily to support combustion", "/uploads/hazard/class5_1_oxidizing_agent.png"),
+        ("Organic Peroxide", "5", "5.2", "Organic substances containing bivalent oxygen structure", "/uploads/hazard/class5_2_organic_peroxide.png"),
+        ("Toxic", "6", "6", "Substances which are liable to cause death or serious injury if swallowed, inhaled, or absorbed through skin", "/uploads/hazard/class6_toxic.png"),
+        ("Corrosive", "8", "8", "Substances which cause destruction to human skin, metals, or other materials", "/uploads/hazard/class8_corrosive.png")
+    ]
     
-    # Check if hazard categories exist, if not, add them
-    cursor.execute("SELECT COUNT(*) FROM hazard_categories")
-    if cursor.fetchone()[0] == 0:
-        # Insert the new hazard categories based on the provided images
-        hazard_categories = [
-            ("Flammable Gas", "2", None, "Gases which are flammable in air", "/uploads/hazard/class2_flammable_gas.png"),
-            ("Non-Flammable Non-Toxic Gas", "2", None, "Gases which are not flammable and not toxic", "/uploads/hazard/class2_nonflammable_gas.png"),
-            ("Toxic Gas", "2", None, "Gases which are known to be toxic or corrosive to humans", "/uploads/hazard/class2_toxic_gas.png"),
-            ("Oxidizing Gas", "2", None, "Gases which may cause or contribute to combustion", "/uploads/hazard/class2_oxidizing_gas.png"),
-            ("Flammable Liquid", "3", None, "Liquids having a flash point not more than 60°C", "/uploads/hazard/class3_flammable_liquid.png"),
-            ("Flammable Solid", "4", None, "Solid materials which can be readily ignited", "/uploads/hazard/class4_flammable_solid.png"),
-            ("Spontaneously Combustible", "4", None, "Substances liable to spontaneous combustion", "/uploads/hazard/class4_spontaneously_combustible.png"),
-            ("Dangerous When Wet", "4", None, "Substances which become spontaneously flammable when wet", "/uploads/hazard/class4_dangerous_when_wet.png"),
-            ("Oxidizing Agent", "5.1", None, "Substances which yield oxygen readily to support combustion", "/uploads/hazard/class5_1_oxidizing_agent.png"),
-            ("Organic Peroxide", "5.2", None, "Organic substances containing bivalent oxygen structure", "/uploads/hazard/class5_2_organic_peroxide.png"),
-            ("Toxic", "6", None, "Substances which are liable to cause death or serious injury if swallowed, inhaled, or absorbed through skin", "/uploads/hazard/class6_toxic.png"),
-            ("Corrosive", "8", None, "Substances which cause destruction to human skin, metals, or other materials", "/uploads/hazard/class8_corrosive.png")
-        ]
-        
-        cursor.executemany("""
-            INSERT INTO hazard_categories (name, hazard_class, subclass, description, logo_path)
-            VALUES (?, ?, ?, ?, ?)
-        """, hazard_categories)
-        
-        print("✅ Initialized database with 12 hazard categories")
+    cursor.executemany("""
+        INSERT INTO hazard_categories (name, hazard_class, subclass, description, logo_path)
+        VALUES (?, ?, ?, ?, ?)
+    """, hazard_categories)
+    
+    print("✅ Initialized database with updated 11 hazard categories")
     
     conn.commit()
     conn.close()
@@ -212,99 +203,112 @@ def init_database():
 def calculate_hazard_status(class_a: str, class_b: str, distance: float) -> tuple[str, bool, float]:
     """
     Calculate safety status based on hazard classes and distance
-    Based on the compatibility matrix provided
+    Based on the updated compatibility matrix and your notes
     Returns: (status, is_isolated, min_required_distance)
     """
     
-    # Compatibility matrix based on the provided image
-    # Key: (class_a, class_b) -> (is_isolated, min_distance_meters)
+    # Updated compatibility matrix based on the image and your notes
+    # Key: (class_a, class_b) -> (action, min_distance_meters)
+    # Actions: "OK_TOGETHER", "SEGREGATE_3M", "SEGREGATE_5M", "ISOLATE", "MAY_NOT_COMPATIBLE"
     compatibility_matrix = {
-        # Flammable Gas (Class 2)
-        ("2_flammable", "2_flammable"): (False, 3.0),  # Same type
-        ("2_flammable", "2_nonflammable"): (False, 5.0),  # OK to store together
-        ("2_flammable", "2_toxic"): (False, 10.0),  # Segregate at least 3m
-        ("2_flammable", "2_oxidizing"): (False, 10.0),  # Segregate at least 3m
-        ("2_flammable", "3"): (False, 10.0),  # Segregate at least 3m
-        ("2_flammable", "4"): (False, 10.0),  # Segregate at least 3m
-        ("2_flammable", "5.1"): (False, 10.0),  # Segregate at least 3m
-        ("2_flammable", "5.2"): (True, float('inf')),  # Isolate
-        ("2_flammable", "6"): (False, 10.0),  # Segregate at least 3m
-        ("2_flammable", "8"): (False, 10.0),  # Segregate at least 3m
+        # Flammable Gas (2.1) - Row 1
+        ("2.1", "2.1"): ("OK_TOGETHER", 0.0),
+        ("2.1", "2.2"): ("OK_TOGETHER", 0.0),
+        ("2.1", "2.3"): ("SEGREGATE_3M", 3.0),
+        ("2.1", "3"): ("SEGREGATE_5M", 5.0),
+        ("2.1", "4.1"): ("SEGREGATE_5M", 5.0),
+        ("2.1", "4.2"): ("SEGREGATE_5M", 5.0),
+        ("2.1", "4.3"): ("SEGREGATE_5M", 5.0),
+        ("2.1", "5.1"): ("SEGREGATE_3M", 3.0),
+        ("2.1", "5.2"): ("ISOLATE", float('inf')),
+        ("2.1", "6"): ("SEGREGATE_3M", 3.0),
+        ("2.1", "8"): ("SEGREGATE_5M", 5.0),
         
-        # Non-Flammable Non-Toxic Gas (Class 2)
-        ("2_nonflammable", "2_nonflammable"): (False, 3.0),  # Same type
-        ("2_nonflammable", "2_toxic"): (False, 5.0),  # OK to store together
-        ("2_nonflammable", "2_oxidizing"): (False, 5.0),  # OK to store together
-        ("2_nonflammable", "3"): (False, 5.0),  # OK to store together
-        ("2_nonflammable", "4"): (False, 5.0),  # OK to store together
-        ("2_nonflammable", "5.1"): (False, 10.0),  # Segregate at least 3m
-        ("2_nonflammable", "5.2"): (True, float('inf')),  # Isolate
-        ("2_nonflammable", "6"): (False, 10.0),  # Segregate at least 3m
-        ("2_nonflammable", "8"): (False, 10.0),  # Segregate at least 3m
+        # Non-Flammable Non-Toxic Gas (2.2) - Row 2
+        ("2.2", "2.2"): ("OK_TOGETHER", 0.0),
+        ("2.2", "2.3"): ("OK_TOGETHER", 0.0),
+        ("2.2", "3"): ("SEGREGATE_5M", 5.0),
+        ("2.2", "4.1"): ("SEGREGATE_5M", 5.0),
+        ("2.2", "4.2"): ("SEGREGATE_5M", 5.0),
+        ("2.2", "4.3"): ("SEGREGATE_5M", 5.0),
+        ("2.2", "5.1"): ("SEGREGATE_3M", 3.0),
+        ("2.2", "5.2"): ("ISOLATE", float('inf')),
+        ("2.2", "6"): ("SEGREGATE_3M", 3.0),
+        ("2.2", "8"): ("SEGREGATE_5M", 5.0),
         
-        # Toxic Gas (Class 2)
-        ("2_toxic", "2_toxic"): (False, 3.0),  # Same type
-        ("2_toxic", "2_oxidizing"): (False, 5.0),  # OK to store together
-        ("2_toxic", "3"): (False, 10.0),  # Segregate at least 3m
-        ("2_toxic", "4"): (False, 10.0),  # Segregate at least 3m
-        ("2_toxic", "5.1"): (False, 10.0),  # Segregate at least 3m
-        ("2_toxic", "5.2"): (True, float('inf')),  # Isolate
-        ("2_toxic", "6"): (False, 10.0),  # Segregate at least 3m
-        ("2_toxic", "8"): (False, 10.0),  # Segregate at least 3m
+        # Toxic Gas (2.3) - Row 3
+        ("2.3", "2.3"): ("MAY_NOT_COMPATIBLE", 3.0), # "MAY NOT be compatible, check goods"
+        ("2.3", "3"): ("SEGREGATE_5M", 5.0),  
+        ("2.3", "4.1"): ("SEGREGATE_5M", 5.0),
+        ("2.3", "4.2"): ("SEGREGATE_5M", 5.0),
+        ("2.3", "4.3"): ("SEGREGATE_5M", 5.0),
+        ("2.3", "5.1"): ("SEGREGATE_3M", 3.0),
+        ("2.3", "5.2"): ("ISOLATE", float('inf')),
+        ("2.3", "6"): ("SEGREGATE_3M", 3.0),
+        ("2.3", "8"): ("SEGREGATE_5M", 5.0),
         
-        # Oxidizing Gas (Class 2)
-        ("2_oxidizing", "2_oxidizing"): (False, 3.0),  # Same type
-        ("2_oxidizing", "3"): (False, 5.0),  # OK to store together
-        ("2_oxidizing", "4"): (False, 10.0),  # Segregate at least 3m
-        ("2_oxidizing", "5.1"): (False, 5.0),  # OK to store together
-        ("2_oxidizing", "5.2"): (True, float('inf')),  # Isolate
-        ("2_oxidizing", "6"): (False, 10.0),  # Segregate at least 3m
-        ("2_oxidizing", "8"): (False, 10.0),  # Segregate at least 3m
+        # Flammable Liquid (3) - Row 4
+        ("3", "3"): ("OK_TOGETHER", 0.0),
+        ("3", "4.1"): ("SEGREGATE_3M", 3.0),
+        ("3", "4.2"): ("SEGREGATE_5M", 5.0),
+        ("3", "4.3"): ("SEGREGATE_5M", 5.0),
+        ("3", "5.1"): ("SEGREGATE_5M", 5.0),
+        ("3", "5.2"): ("ISOLATE", float('inf')),
+        ("3", "6"): ("SEGREGATE_3M", 3.0),
+        ("3", "8"): ("SEGREGATE_3M", 3.0),
         
-        # Flammable Liquid (Class 3)
-        ("3", "3"): (False, 3.0),  # Same type
-        ("3", "4"): (False, 5.0),  # OK to store together
-        ("3", "5.1"): (False, 10.0),  # Segregate at least 3m
-        ("3", "5.2"): (True, float('inf')),  # Isolate
-        ("3", "6"): (False, 10.0),  # Segregate at least 3m
-        ("3", "8"): (False, 10.0),  # Segregate at least 3m
+        # Flammable Solid (4.1) - Row 5
+        ("4.1", "4.1"): ("OK_TOGETHER", 0.0),
+        ("4.1", "4.2"): ("SEGREGATE_3M", 3.0),
+        ("4.1", "4.3"): ("SEGREGATE_5M", 5.0),
+        ("4.1", "5.1"): ("SEGREGATE_3M", 3.0),
+        ("4.1", "5.2"): ("ISOLATE", float('inf')),
+        ("4.1", "6"): ("SEGREGATE_3M", 3.0),
+        ("4.1", "8"): ("MAY_NOT_COMPATIBLE", 3.0), # "MAY NOT be compatible, check goods"
         
-        # Flammable Solid (Class 4)
-        ("4", "4"): (False, 3.0),  # Same type
-        ("4", "5.1"): (False, 10.0),  # Segregate at least 3m
-        ("4", "5.2"): (True, float('inf')),  # Isolate
-        ("4", "6"): (False, 10.0),  # Segregate at least 3m
-        ("4", "8"): (False, 10.0),  # Segregate at least 3m
+        # Spontaneously Combustible (4.2) - Row 6
+        ("4.2", "4.2"): ("OK_TOGETHER", 0.0),
+        ("4.2", "4.3"): ("SEGREGATE_5M", 5.0),
+        ("4.2", "5.1"): ("SEGREGATE_5M", 5.0),
+        ("4.2", "5.2"): ("ISOLATE", float('inf')),
+        ("4.2", "6"): ("SEGREGATE_3M", 3.0),
+        ("4.2", "8"): ("SEGREGATE_3M", 3.0),
         
-        # Oxidizing Agent (Class 5.1)
-        ("5.1", "5.1"): (False, 3.0),  # Same type
-        ("5.1", "5.2"): (True, float('inf')),  # Isolate
-        ("5.1", "6"): (False, 10.0),  # Segregate at least 3m
-        ("5.1", "8"): (False, 10.0),  # Segregate at least 3m
+        # Dangerous When Wet (4.3) - Row 7
+        ("4.3", "4.3"): ("OK_TOGETHER", 0.0),
+        ("4.3", "5.1"): ("SEGREGATE_5M", 5.0),
+        ("4.3", "5.2"): ("ISOLATE", float('inf')),
+        ("4.3", "6"): ("SEGREGATE_3M", 3.0),
+        ("4.3", "8"): ("SEGREGATE_5M", 5.0),
         
-        # Organic Peroxide (Class 5.2) - ISOLATE from all except Corrosive
-        ("5.2", "5.2"): (False, 3.0),  # Same type
-        ("5.2", "6"): (True, float('inf')),  # Isolate
-        ("5.2", "8"): (False, 5.0),  # OK to store together
+        # Oxidizing Agent (5.1) - Row 8
+        ("5.1", "5.1"): ("MAY_NOT_COMPATIBLE", 3.0),
+        ("5.1", "5.2"): ("ISOLATE", float('inf')),  # Changed from SEGREGATE_5M to ISOLATE per your note
+        ("5.1", "6"): ("SEGREGATE_3M", 3.0),
+        ("5.1", "8"): ("SEGREGATE_3M", 3.0),
         
-        # Toxic (Class 6)
-        ("6", "6"): (False, 3.0),  # Same type
-        ("6", "8"): (False, 5.0),  # OK to store together
+        # Organic Peroxide (5.2) - Row 9
+        ("5.2", "5.2"): ("OK_TOGETHER", 0.0),
+        ("5.2", "6"): ("ISOLATE", float('inf')),
+        ("5.2", "8"): ("SEGREGATE_3M", 3.0),
         
-        # Corrosive (Class 8)
-        ("8", "8"): (False, 3.0),  # Same type
+        # Toxic (6) - Row 10
+        ("6", "6"): ("OK_TOGETHER", 0.0),
+        ("6", "8"): ("SEGREGATE_5M", 5.0),
+        
+        # Corrosive (8) - Row 11
+        ("8", "8"): ("MAY_NOT_COMPATIBLE", 3.0),
     }    
 
     # Convert hazard names to class codes for lookup
     name_to_class = {
-        "Flammable Gas": "2_flammable",
-        "Non-Flammable Non-Toxic Gas": "2_nonflammable", 
-        "Toxic Gas": "2_toxic",
-        "Oxidizing Gas": "2_oxidizing",
+        "Flammable Gas": "2.1",
+        "Non-Flammable Non-Toxic Gas": "2.2", 
+        "Toxic Gas": "2.3",
         "Flammable Liquid": "3",
-        "Flammable Solid": "4",
-        "Spontaneously Combustible": "4",  # Treat as Class 4
-        "Dangerous When Wet": "4",  # Treat as Class 4
+        "Flammable Solid": "4.1",
+        "Spontaneously Combustible": "4.2",
+        "Dangerous When Wet": "4.3",
         "Oxidizing Agent": "5.1",
         "Organic Peroxide": "5.2",
         "Toxic": "6",
@@ -315,36 +319,53 @@ def calculate_hazard_status(class_a: str, class_b: str, distance: float) -> tupl
     class_code_a = name_to_class.get(class_a, class_a)
     class_code_b = name_to_class.get(class_b, class_b)
     
-    # Same hazard type
-    if class_code_a == class_code_b:
-        min_distance = 3.0
-        if distance >= min_distance:
-            return "safe", False, min_distance
-        else:
-            return "danger", False, min_distance
-    
-    # Look up compatibility (normalize pair order)
+    # Look up compatibility (normalize pair order for symmetric lookup)
     pair_key = tuple(sorted([class_code_a, class_code_b]))
     compatibility = compatibility_matrix.get(pair_key)
     
     if not compatibility:
         # Default for unknown pairs
-        min_distance = 5.0
-        is_isolated = False
+        action = "SEGREGATE_3M"
+        min_distance = 3.0
     else:
-        is_isolated, min_distance = compatibility
+        action, min_distance = compatibility
     
-    # Check if pair must be isolated
-    if is_isolated:
+    # Process the action based on your notes
+    if action == "ISOLATE":
         return "danger", True, min_distance
+    elif action == "OK_TOGETHER":
+        if distance >= 0:  # Any distance is okay
+            return "safe", False, 0.0
+        else:
+            return "safe", False, 0.0
+    elif action == "MAY_NOT_COMPATIBLE":
+        # Per your note: "MAY NOT be compatible" -> if same goods else apply 3M
+        if class_code_a == class_code_b:
+            # Same goods - treat as OK
+            return "safe", False, 0.0
+        else:
+            # Different goods - apply 3M rule
+            min_distance = 3.0
+            if distance >= min_distance:
+                return "safe", False, min_distance
+            elif distance >= min_distance * 0.6:  # 60% of required
+                return "caution", False, min_distance
+            else:
+                return "danger", False, min_distance
+    elif action == "SEGREGATE_3M":
+        min_distance = 3.0
+    elif action == "SEGREGATE_5M":
+        # Per your note: when Oxidizer Agent segregates with 5M -> isolate
+        # But this case should already be handled as ISOLATE above
+        min_distance = 5.0
     
-    # Check distance requirements
+    # Check distance requirements for segregation
     if distance >= min_distance:
-        return "safe", is_isolated, min_distance
+        return "safe", False, min_distance
     elif distance >= min_distance * 0.6:  # 60% of required distance
-        return "caution", is_isolated, min_distance
+        return "caution", False, min_distance
     else:
-        return "danger", is_isolated, min_distance
+        return "danger", False, min_distance
 
 # Routes
 @app.get("/")
@@ -357,7 +378,7 @@ def get_hazard_categories():
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    cursor.execute("SELECT id, name, hazard_class, subclass, description, logo_path FROM hazard_categories") # ORDER BY hazard_class, name")
+    cursor.execute("SELECT id, name, hazard_class, subclass, description, logo_path FROM hazard_categories ORDER BY hazard_class, subclass, name")
     categories = []
     
     for row in cursor.fetchall():
@@ -466,12 +487,12 @@ def get_containers():
         
         # Get hazards for this container
         cursor.execute("""
-            SELECT h.name, h.hazard_class 
+            SELECT h.name, h.hazard_class, h.subclass 
             FROM hazard_categories h
             JOIN container_hazards ch ON h.id = ch.hazard_category_id
             WHERE ch.container_id = ?
         """, (container_id,))
-        hazards = [{"name": row['name'], "hazard_class": row['hazard_class']} for row in cursor.fetchall()]
+        hazards = [{"name": row['name'], "hazard_class": row['hazard_class'], "subclass": row['subclass']} for row in cursor.fetchall()]
         
         # Get pairs for this container
         cursor.execute("""
@@ -585,7 +606,7 @@ def health_check():
 async def startup_event():
     init_database()
     print("🚀 Kinross Chemical Container Safety API started")
-    print("📊 Database initialized with new hazard classification system")
+    print("📊 Database initialized with updated hazard classification system")
     print("🔗 API Documentation: http://localhost:8000/docs")
 
 if __name__ == "__main__":
