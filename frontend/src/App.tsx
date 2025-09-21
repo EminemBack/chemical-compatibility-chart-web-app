@@ -718,10 +718,15 @@ function App() {
                       <input
                         type="text"
                         value={container}
-                        onChange={(e) => setContainer(e.target.value)}
+                        readOnly
                         placeholder="Auto-generated container ID"
                         required
-                        style={{ flex: 1 }}
+                        style={{ 
+                          flex: 1,
+                          backgroundColor: '#f5f5f5',
+                          cursor: 'not-allowed',
+                          color: '#666'
+                        }}
                       />
                       <button
                         type="button"
@@ -737,12 +742,22 @@ function App() {
                           borderRadius: '6px',
                           cursor: 'pointer',
                           fontSize: '0.9rem',
-                          fontWeight: '600'
+                          fontWeight: '600',
+                          whiteSpace: 'nowrap'
                         }}
                       >
-                        Generate
+                        Generate New
                       </button>
                     </div>
+                    <small style={{ 
+                      color: 'var(--kinross-dark-gray)', 
+                      fontSize: '0.85rem',
+                      fontStyle: 'italic',
+                      marginTop: '0.25rem',
+                      display: 'block'
+                    }}>
+                      Container ID is auto-generated. Click "Generate New" for a different ID.
+                    </small>
                   </label>
                 </div>
                 <div className="form-field">
