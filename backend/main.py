@@ -453,8 +453,9 @@ async def get_containers():
             pairs = []
             for pair_row in pair_rows:
                 min_dist = pair_row['min_required_distance']
-                if min_dist is None:
-                    min_dist = float('inf')
+                # Handle infinity values properly for JSON serialization
+                if min_dist is None or min_dist == float('inf'):
+                    min_dist = None  # Use None instead of infinity
                 
                 pairs.append({
                     "id": pair_row['id'],

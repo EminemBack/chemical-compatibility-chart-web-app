@@ -839,13 +839,14 @@ function App() {
                     <div className="container-pairs">
                       <h4>Compatibility Assessment:</h4>
                       <div className="pairs-results">
+                        {/* // In your App.tsx, update the container display section */}
                         {container.pairs.length === 0 ? (
                           <p style={{ fontStyle: 'italic', color: 'var(--kinross-dark-gray)' }}>
                             Single hazard container - no pairs to assess
                           </p>
                         ) : (
                           container.pairs.map(pair => {
-                            const isolationStatus = getIsolationStatus(pair.is_isolated, pair.min_required_distance);
+                            const isolationStatus = getIsolationStatus(pair.is_isolated, pair.min_required_distance || 0);
                             return (
                               <div key={pair.id} className="pair-result" style={getStatusColor(pair.status)}>
                                 <div className="pair-names">
@@ -855,7 +856,13 @@ function App() {
                                 </div>
                                 <div className="pair-details">
                                   <span><strong>Actual:</strong> {pair.distance}m</span>
-                                  <span><strong>Required:</strong> {pair.min_required_distance === Infinity ? 'N/A' : `${pair.min_required_distance}m`}</span>
+                                  <span>
+                                    <strong>Required:</strong> {
+                                      pair.min_required_distance === null 
+                                        ? 'Must Be Isolated' 
+                                        : `${pair.min_required_distance}m`
+                                    }
+                                  </span>
                                   <span 
                                     className="isolation-badge"
                                     style={{ 
