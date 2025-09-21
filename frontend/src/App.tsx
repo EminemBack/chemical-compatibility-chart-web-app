@@ -50,16 +50,18 @@ const API_BASE = 'http://localhost:8000';
 // ADD THESE CONSTANTS HERE:
 // Predefined department list
 const DEPARTMENTS = [
-  'Mining Operations',
-  'Processing Plant',
-  'Maintenance',
-  'Environmental Services',
-  'Laboratory',
-  'Safety & Security',
-  'Logistics & Supply Chain',
-  'Engineering',
-  'Administration',
-  'Exploration'
+  'Environment',
+  'Project',
+  'External Relations',
+  'Human Resources',
+  'Community Relations',
+  'Site Power and Electrical',
+  'Health & Safety',
+  'IT',
+  'Finance',
+  'Mobile Maintenance',
+  'Support Services',
+  'Technical Services'
 ];
 
 // Function to generate container ID
@@ -690,13 +692,46 @@ function App() {
                 <div className="form-field">
                   <label>
                     Location *
-                    <input
-                      type="text"
-                      value={location}
-                      onChange={(e) => setLocation(e.target.value)}
-                      placeholder="e.g., Warehouse A, Building 3, Storage Room 101"
-                      required
-                    />
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      <input
+                        type="text"
+                        value={location}
+                        onChange={(e) => setLocation(e.target.value)}
+                        placeholder="e.g., Warehouse A or GPS coordinates"
+                        required
+                        style={{ flex: 1 }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (navigator.geolocation) {
+                            navigator.geolocation.getCurrentPosition(
+                              (position) => {
+                                const coords = `${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}`;
+                                setLocation(coords);
+                              },
+                              (error) => {
+                                alert('Unable to get GPS coordinates: ' + error.message);
+                              }
+                            );
+                          } else {
+                            alert('Geolocation is not supported by this browser, please type your location point or common-name');
+                          }
+                        }}
+                        style={{
+                          padding: '0.75rem 1rem',
+                          background: 'var(--kinross-gold)',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontSize: '0.9rem',
+                          fontWeight: '600'
+                        }}
+                      >
+                        📍 Get GPS
+                      </button>
+                    </div>
                   </label>
                 </div>
                 <div className="form-field">
