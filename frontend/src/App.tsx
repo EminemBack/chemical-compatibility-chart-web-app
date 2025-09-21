@@ -503,6 +503,22 @@ function App() {
     }
   };
 
+  // ADD THIS NEW FUNCTION HERE: to isolate required hazards which can not goes with each other
+  const hasIsolationRequired = () => {
+    for (const pair of hazardPairs) {
+      const pairKey = `${pair.hazard_category_a_id}-${pair.hazard_category_b_id}`;
+      const status = pairStatuses[pairKey];
+      if (status && status.is_isolated) {
+        return {
+          hasIsolation: true,
+          hazardA: getHazardName(pair.hazard_category_a_id),
+          hazardB: getHazardName(pair.hazard_category_b_id)
+        };
+      }
+    }
+    return { hasIsolation: false };
+  };
+
   const submitContainer = async () => {
     if (!department.trim() || !location.trim() || !submittedBy.trim() || !container.trim() || !containerType.trim()) {
       alert('Please fill in all required fields (Department, Location, Submitted By, Container, Type)');
@@ -511,6 +527,13 @@ function App() {
     
     if (selectedHazards.length === 0) {
       alert('Please select at least one hazard category');
+      return;
+    }
+
+    // ADD THIS VALIDATION CHECK:
+    const isolationCheck = hasIsolationRequired();
+    if (isolationCheck.hasIsolation) {
+      alert(`⚠️ SUBMISSION BLOCKED\n\nThe hazard pair "${isolationCheck.hazardA}" and "${isolationCheck.hazardB}" MUST BE ISOLATED and cannot be stored in the same container.\n\nThese chemicals require complete separation and cannot be combined in any container configuration.`);
       return;
     }
 
@@ -784,6 +807,32 @@ function App() {
                   </div>
                 )}
                 
+                {/* ADD THIS ISOLATION WARNING */}
+                {(() => {
+                  const isolationCheck = hasIsolationRequired();
+                  if (isolationCheck.hasIsolation) {
+                    return (
+                      <div className="isolation-warning" style={{
+                        background: '#ffebee',
+                        border: '2px solid #f44336',
+                        borderRadius: '10px',
+                        padding: '1.5rem',
+                        marginBottom: '2rem',
+                        textAlign: 'center'
+                      }}>
+                        <h3 style={{ color: '#c62828', margin: '0 0 1rem 0' }}>
+                          ⚠️ ISOLATION REQUIRED - SUBMISSION BLOCKED
+                        </h3>
+                        <p style={{ color: '#d32f2f', margin: '0', fontWeight: '600' }}>
+                          The hazard pair "{isolationCheck.hazardA}" and "{isolationCheck.hazardB}" 
+                          MUST BE ISOLATED and cannot be stored together in any container.
+                        </p>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+                
                 <div className="form-actions">
                   <button className="reset-btn" onClick={resetForm} type="button">
                     Reset Form
@@ -791,7 +840,11 @@ function App() {
                   <button
                     className="submit-btn"
                     onClick={submitContainer}
-                    disabled={loading}
+                    disabled={loading || hasIsolationRequired().hasIsolation}
+                    style={{
+                      opacity: hasIsolationRequired().hasIsolation ? 0.4 : 1,
+                      cursor: hasIsolationRequired().hasIsolation ? 'not-allowed' : 'pointer'
+                    }}
                   >
                     {loading ? 'Submitting Assessment...' : 'Submit Safety Assessment'}
                   </button>
