@@ -1,0 +1,45 @@
+# .dockerignore (root)
+.git
+.gitignore
+README.md
+Dockerfile
+.dockerignore
+.env*
+node_modules
+npm-debug.log*
+.nyc_output
+coverage
+dist
+.vscode
+.idea
+**/*.log
+**/logs
+**/__pycache__
+**/*.pyc
+**/*.db
+**/*.sqlite
+**/venv
+**/.venv
+
+# Backend specific
+backend/.env
+backend/venv
+backend/__pycache__
+backend/*.db
+backend/logs
+backend/chemical_compatibility.db
+
+# Frontend specific
+frontend/node_modules
+frontend/dist
+frontend/.vscode
+frontend/coverage
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+# Documentation
+docs/
+Docs/
+*.md
+!README.md

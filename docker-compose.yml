@@ -1,0 +1,79 @@
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: kinross-chemical-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: kinross_chemical
+      POSTGRES_USER: kinross_user
+      POSTGRES_PASSWORD: kinross_secure_2025
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d
+    networks:
+      - kinross-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kinross_user -d kinross_chemical"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: kinross-chemical-api
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://kinross_user:kinross_secure_2025@postgres:5432/kinross_chemical
+      - CORS_ORIGINS=http://localhost,http://localhost:80
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/uploads:/app/uploads
+      - ./backend/logs:/app/logs
+    networks:
+      - kinross-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # React Frontend with Nginx
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: kinross-chemical-web
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    networks:
+      - kinross-network
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  kinross-network:
+    driver: bridge

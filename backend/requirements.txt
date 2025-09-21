@@ -1,16 +1,31 @@
+# backend/requirements.txt
 # FastAPI and ASGI server
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 
-# Database - SQLAlchemy 2.0 compatible
+# PostgreSQL database adapter
+psycopg2-binary==2.9.9
+asyncpg==0.29.0
+
+# SQLAlchemy 2.0 for PostgreSQL
 sqlalchemy==2.0.23
+alembic==1.13.1
 
 # File uploads and form data
 python-multipart==0.0.6
 
-# Environment variables (optional but recommended)
+# Environment variables
 python-dotenv==1.0.0
 
-# Pydantic for data validation - SQLAlchemy 2.0 compatible
+# Pydantic for data validation
 pydantic==2.5.0
 typing-extensions==4.8.0
+
+# Date and time handling
+python-dateutil==2.8.2
+
+# HTTP client for health checks
+httpx==0.25.2
+
+# Logging
+structlog==23.2.0
