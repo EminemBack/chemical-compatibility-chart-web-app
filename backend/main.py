@@ -546,6 +546,56 @@ async def health_check():
         logger.error("Health check failed", error=str(e))
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
+@app.get("/generate-container-id/")
+async def generate_container_id():
+    """Generate a unique container ID following various patterns"""
+    try:
+        # Get all existing container IDs
+        existing_containers = await execute_query("SELECT container FROM containers")
+        existing_ids = {row['container'] for row in existing_containers}
+        
+        # Define possible patterns
+        patterns = [
+            "CONT-{num}",
+            "CONTAINER-{letters}-{num}",
+            "CONT-{num}-{letters}",
+            "CONT-{num}-{letters2}"
+        ]
+        
+        # Generate random components
+        import random
+        import string
+        
+        for _ in range(100):  # Try up to 100 times to find unique ID
+            pattern = random.choice(patterns)
+            num = random.randint(1001, 9999)
+            letters = ''.join(random.choices(string.ascii_uppercase, k=3))
+            letters2 = ''.join(random.choices(string.ascii_uppercase, k=3))
+            
+            # Generate ID based on pattern
+            if pattern == "CONT-{num}":
+                container_id = f"CONT-{num}"
+            elif pattern == "CONTAINER-{letters}-{num}":
+                container_id = f"CONTAINER-{letters}-{num}"
+            elif pattern == "CONT-{num}-{letters}":
+                container_id = f"CONT-{num}-{letters}"
+            elif pattern == "CONT-{num}-{letters2}":
+                container_id = f"CONT-{num}-{letters2}"
+            
+            # Check if unique
+            if container_id not in existing_ids:
+                return {"container_id": container_id}
+        
+        # Fallback if all attempts failed
+        import time
+        timestamp = str(int(time.time()))[-4:]
+        fallback_id = f"CONT-{timestamp}-GEN"
+        return {"container_id": fallback_id}
+        
+    except Exception as e:
+        logger.error("Error generating container ID", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Error generating container ID: {str(e)}")
+
 # Startup and shutdown events
 @app.on_event("startup")
 async def startup_event():

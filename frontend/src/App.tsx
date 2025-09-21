@@ -47,6 +47,41 @@ interface MatrixCell {
 
 const API_BASE = 'http://localhost:8000';
 
+// ADD THESE CONSTANTS HERE:
+// Predefined department list
+const DEPARTMENTS = [
+  'Mining Operations',
+  'Processing Plant',
+  'Maintenance',
+  'Environmental Services',
+  'Laboratory',
+  'Safety & Security',
+  'Logistics & Supply Chain',
+  'Engineering',
+  'Administration',
+  'Exploration'
+];
+
+// Function to generate container ID
+const generateContainerID = async (): Promise<string> => {
+  try {
+    const response = await fetch(`${API_BASE}/generate-container-id/`);
+    if (response.ok) {
+      const data = await response.json();
+      return data.container_id;
+    }
+  } catch (error) {
+    console.error('Error generating container ID:', error);
+  }
+  
+  // Fallback generation
+  const timestamp = Date.now().toString().slice(-4);
+  const letters = String.fromCharCode(65 + Math.floor(Math.random() * 26)) + 
+                  String.fromCharCode(65 + Math.floor(Math.random() * 26)) + 
+                  String.fromCharCode(65 + Math.floor(Math.random() * 26));
+  return `CONT-${timestamp}-${letters}`;
+};
+
 // Popup Compatibility Matrix Component
 const PopupCompatibilityMatrix: React.FC<{
   selectedHazards: HazardCategory[];
@@ -384,6 +419,14 @@ function App() {
     fetchContainers();
   }, []);
 
+  // ADD THIS NEW useEffect:
+  useEffect(() => {
+    // Generate container ID when component mounts
+    if (!container) {
+      generateContainerID().then(setContainer);
+    }
+  }, []);
+
   const fetchHazardCategories = async () => {
     try {
       const response = await fetch(`${API_BASE}/hazard-categories/`);
@@ -582,15 +625,18 @@ function App() {
     }
   };
 
-  const resetForm = () => {
+  const resetForm = async () => {
     setDepartment('');
     setLocation('');
     setSubmittedBy('');
-    setContainer('');
     setContainerType('');
     setSelectedHazards([]);
     setHazardPairs([]);
     setPairStatuses({});
+    
+    // Generate new container ID when resetting
+    const newId = await generateContainerID();
+    setContainer(newId);
   };
 
   return (
@@ -629,13 +675,16 @@ function App() {
                 <div className="form-field">
                   <label>
                     Department *
-                    <input
-                      type="text"
+                    <select
                       value={department}
                       onChange={(e) => setDepartment(e.target.value)}
-                      placeholder="e.g., Mining Operations, Processing, Maintenance"
                       required
-                    />
+                    >
+                      <option value="">Select department</option>
+                      {DEPARTMENTS.map(dept => (
+                        <option key={dept} value={dept}>{dept}</option>
+                      ))}
+                    </select>
                   </label>
                 </div>
                 <div className="form-field">
@@ -664,14 +713,36 @@ function App() {
                 </div>
                 <div className="form-field">
                   <label>
-                    Container *
-                    <input
-                      type="text"
-                      value={container}
-                      onChange={(e) => setContainer(e.target.value)}
-                      placeholder="e.g., Container-001, CONT-ABC-123"
-                      required
-                    />
+                    Container ID *
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      <input
+                        type="text"
+                        value={container}
+                        onChange={(e) => setContainer(e.target.value)}
+                        placeholder="Auto-generated container ID"
+                        required
+                        style={{ flex: 1 }}
+                      />
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const newId = await generateContainerID();
+                          setContainer(newId);
+                        }}
+                        style={{
+                          padding: '0.75rem 1rem',
+                          background: 'var(--kinross-gold)',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontSize: '0.9rem',
+                          fontWeight: '600'
+                        }}
+                      >
+                        Generate
+                      </button>
+                    </div>
                   </label>
                 </div>
                 <div className="form-field">
