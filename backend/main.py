@@ -89,6 +89,21 @@ class ContainerSubmission(BaseModel):
     selected_hazards: List[int]  # List of hazard category IDs
     hazard_pairs: List[HazardPairData]
 
+class User(BaseModel):
+    id: int
+    email: str
+    name: str
+    role: str  # 'admin', 'user', 'viewer'
+    department: str
+    active: bool
+
+class AuthRequest(BaseModel):
+    email: str
+
+class VerifyCodeRequest(BaseModel):
+    email: str
+    code: str
+
 # Database functions
 async def get_db_pool():
     """Get database connection pool"""
