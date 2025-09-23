@@ -520,14 +520,23 @@ async def submit_container(submission: ContainerSubmission):
         raise HTTPException(status_code=500, detail=f"Error saving container data: {str(e)}")
 
 @app.get("/containers/")
-async def get_containers():
-    """Get all containers with their hazards and pairs"""
+async def get_containers(authorization: str = Header(None)):
+    """Get containers with user-specific filtering"""
     try:
-        # Get all containers
-        container_rows = await execute_query("""
-            SELECT * FROM containers 
-            ORDER BY submitted_at DESC
-        """)
+        # Get current user
+        current_user = await get_current_user_from_token(authorization)
+        
+        # Build query based on user role
+        if current_user['role'] == 'admin':
+            # Admin sees all containers
+            container_query = "SELECT * FROM containers ORDER BY submitted_at DESC"
+            container_params = []
+        else:
+            # Regular users see only their own containers
+            container_query = "SELECT * FROM containers WHERE submitted_by = $1 ORDER BY submitted_at DESC"
+            container_params = [current_user['name']]
+        
+        container_rows = await execute_query(container_query, *container_params)
         
         containers = []
         
@@ -585,12 +594,38 @@ async def get_containers():
                 "pairs": pairs
             })
         
-        logger.info("Retrieved containers", count=len(containers))
+        logger.info("Retrieved containers", count=len(containers), user_role=current_user['role'])
         return containers
         
     except Exception as e:
         logger.error("Error fetching containers", error=str(e))
         raise HTTPException(status_code=500, detail=f"Error fetching containers: {str(e)}")
+
+async def get_current_user_from_token(authorization: str = None):
+    """Extract user from JWT token"""
+    try:
+        if not authorization or not authorization.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Invalid authorization header")
+        
+        token = authorization.split(" ")[1]
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        
+        if email is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        
+        user = await execute_single(
+            "SELECT id, email, name, role, department FROM users WHERE email = $1 AND active = true",
+            email
+        )
+        
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+        
+        return dict(user)
+        
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
 
 @app.post("/preview-status/")
 async def get_preview_status(hazard_a_id: int, hazard_b_id: int, distance: float):

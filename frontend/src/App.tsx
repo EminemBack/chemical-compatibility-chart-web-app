@@ -421,7 +421,7 @@ function App() {
   const [selectedHazards, setSelectedHazards] = useState<HazardCategory[]>([]);
   const [department, setDepartment] = useState('');
   const [location, setLocation] = useState('');
-  const [submittedBy, setSubmittedBy] = useState('');
+  // const [submittedBy, setSubmittedBy] = useState('');
   const [container, setContainer] = useState('');
   const [containerType, setContainerType] = useState('');
   const [hazardPairs, setHazardPairs] = useState<HazardPairData[]>([]);
@@ -468,7 +468,12 @@ function App() {
 
   const fetchContainers = async () => {
     try {
-      const response = await fetch(`${API_BASE}/containers/`);
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(`${API_BASE}/containers/`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       const data = await response.json();
       setContainers(data);
     } catch (error) {
@@ -682,8 +687,8 @@ function App() {
   };  
 
   const submitContainer = async () => {
-    if (!department.trim() || !location.trim() || !submittedBy.trim() || !container.trim() || !containerType.trim()) {
-      alert('Please fill in all required fields (Department, Location, Submitted By, Container, Type)');
+    if (!department.trim() || !location.trim() || !container.trim() || !containerType.trim()) {
+      alert('Please fill in all required fields (Department, Location, Container, Type)');
       return;
     }
     
@@ -701,15 +706,17 @@ function App() {
 
     setLoading(true);
     try {
+      const token = localStorage.getItem('access_token');
       const response = await fetch(`${API_BASE}/containers/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           department,
           location,
-          submitted_by: submittedBy,
+          submitted_by: authState.user?.name || '', // Use authenticated user's name
           container,
           container_type: containerType,
           selected_hazards: selectedHazards.map(h => h.id),
@@ -721,10 +728,10 @@ function App() {
         const result = await response.json();
         alert(`Container safety assessment submitted successfully!\nContainer ID: ${result.container_id}`);
         
-        // Reset form
+        // Reset form (but keep user name)
         setDepartment('');
         setLocation('');
-        setSubmittedBy('');
+        // Don't reset submittedBy - it's auto-filled
         setContainer('');
         setContainerType('');
         setSelectedHazards([]);
@@ -747,7 +754,7 @@ function App() {
   const resetForm = async () => {
     setDepartment('');
     setLocation('');
-    setSubmittedBy('');
+    // setSubmittedBy('');
     setContainerType('');
     setSelectedHazards([]);
     setHazardPairs([]);
@@ -1051,11 +1058,24 @@ function App() {
                         Submitted By *
                         <input
                           type="text"
-                          value={submittedBy}
-                          onChange={(e) => setSubmittedBy(e.target.value)}
-                          placeholder="Your full name"
+                          value={authState.user?.name || ''}
+                          readOnly
                           required
+                          style={{ 
+                            backgroundColor: '#f5f5f5',
+                            cursor: 'not-allowed',
+                            color: '#666'
+                          }}
                         />
+                        <small style={{ 
+                          color: 'var(--kinross-dark-gray)', 
+                          fontSize: '0.85rem',
+                          fontStyle: 'italic',
+                          marginTop: '0.25rem',
+                          display: 'block'
+                        }}>
+                          Automatically filled from your user profile
+                        </small>
                       </label>
                     </div>
                     <div className="form-field">
