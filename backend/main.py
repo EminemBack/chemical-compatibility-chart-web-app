@@ -4,7 +4,7 @@ Updated Chemical Container Safety Assessment API
 With PostgreSQL database support and Docker containerization
 """
 
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -15,6 +15,15 @@ import os
 import json
 from pathlib import Path
 import structlog
+
+# handling auth
+import redis
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import secrets
+from jose import JWTError, jwt
+from datetime import timedelta
 
 # Configure structured logging
 structlog.configure(
@@ -40,6 +49,20 @@ logger = structlog.get_logger()
 # Database configuration
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://kinross_user:kinross_secure_2025@localhost:5432/kinross_chemical")
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:80,http://localhost").split(",")
+
+# Redis configuration
+REDIS_URL = os.getenv("REDIS_URL", "")
+redis_client = None
+
+# SMTP Configuration  
+SMTP_SERVER = os.getenv("SMTP_SERVER", "")
+SMTP_PORT = int(os.getenv("SMTP_PORT", ""))
+NOTIFICATION_FROM_EMAIL = os.getenv("NOTIFICATION_FROM_EMAIL", "")
+
+# JWT Configuration
+SECRET_KEY = os.getenv("SECRET_KEY", "")
+ALGORITHM = os.getenv("ALGORITHM", "")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "") )
 
 # Create uploads directory for hazard logos
 Path("uploads/hazard").mkdir(parents=True, exist_ok=True)
@@ -103,6 +126,13 @@ class AuthRequest(BaseModel):
 class VerifyCodeRequest(BaseModel):
     email: str
     code: str
+
+class UserResponse(BaseModel):
+    id: int
+    email: str
+    name: str
+    role: str
+    department: str
 
 # Database functions
 async def get_db_pool():
@@ -308,6 +338,67 @@ def calculate_hazard_status(class_a: str, class_b: str, distance: float) -> tupl
         return "caution", False, min_distance
     else:
         return "danger", False, min_distance
+
+# Redis Connection Function
+async def get_redis_client():
+    """Get Redis client"""
+    global redis_client
+    if redis_client is None:
+        try:
+            redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+            # Test connection
+            redis_client.ping()
+            logger.info("Redis connection established")
+        except Exception as e:
+            logger.error("Failed to connect to Redis", error=str(e))
+            raise
+    return redis_client
+
+async def send_verification_email(email: str, code: str, name: str):
+    """Send verification email via SMTP (no authentication)"""
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = NOTIFICATION_FROM_EMAIL
+        msg['To'] = email
+        msg['Subject'] = 'Chemical Safety System - Verification Code'
+        
+        body = f"""
+            Hello {name},
+
+            Your verification code for the Chemical Safety Assessment System is: {code}
+
+            This code will expire in 5 minutes.
+
+            If you did not request this code, please ignore this email.
+
+            Best regards,
+            Kinross Chemical Safety System
+        """
+        
+        msg.attach(MIMEText(body, 'plain'))
+        
+        # Connect to SMTP server (no authentication)
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        server.sendmail(NOTIFICATION_FROM_EMAIL, email, msg.as_string())
+        server.quit()
+        
+        logger.info("Verification email sent", email=email)
+        
+    except Exception as e:
+        logger.error("Failed to send verification email", error=str(e), email=email)
+        raise
+
+def create_access_token(data: dict, expires_delta: timedelta = None):
+    """Create JWT access token"""
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
 
 # Routes
 @app.get("/")
@@ -534,6 +625,130 @@ async def get_preview_status(hazard_a_id: int, hazard_b_id: int, distance: float
         logger.error("Error calculating status", error=str(e))
         raise HTTPException(status_code=500, detail=f"Error calculating status: {str(e)}")
 
+# Auth Endpoints
+@app.post("/auth/request-code")
+async def request_verification_code(auth_request: AuthRequest):
+    """Send verification code to user email"""
+    try:
+        email = auth_request.email.lower().strip()
+        
+        # Check if user exists in database
+        user = await execute_single(
+            "SELECT id, email, name, role, department, active FROM users WHERE email = $1", 
+            email
+        )
+        
+        if not user or not user['active']:
+            raise HTTPException(status_code=404, detail="User not found or inactive")
+        
+        # Generate 6-digit code
+        code = str(secrets.randbelow(900000) + 100000)
+        
+        # Store code in Redis with 5-minute expiration
+        redis_client = await get_redis_client()
+        redis_key = f"verification_code:{email}"
+        redis_client.setex(redis_key, 300, code)  # 5 minutes expiration
+        
+        # Send email
+        await send_verification_email(email, code, user['name'])
+        
+        logger.info("Verification code sent", email=email, user_id=user['id'])
+        return {"message": "Verification code sent to your email"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error sending verification code", error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to send verification code")
+
+@app.post("/auth/verify-code")
+async def verify_code(verify_request: VerifyCodeRequest):
+    """Verify code and return user session"""
+    try:
+        email = verify_request.email.lower().strip()
+        
+        # Get code from Redis
+        redis_client = await get_redis_client()
+        redis_key = f"verification_code:{email}"
+        stored_code = redis_client.get(redis_key)
+        
+        if not stored_code:
+            raise HTTPException(status_code=400, detail="Verification code not found or expired")
+        
+        # Check code
+        if verify_request.code != stored_code:
+            raise HTTPException(status_code=400, detail="Invalid verification code")
+        
+        # Get user data
+        user = await execute_single(
+            "SELECT id, email, name, role, department FROM users WHERE email = $1 AND active = true", 
+            email
+        )
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Delete code from Redis
+        redis_client.delete(redis_key)
+        
+        # Create access token
+        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            data={"sub": user['email'], "user_id": user['id'], "role": user['role']},
+            expires_delta=access_token_expires
+        )
+        logger.info(f'Access token: {access_token}')
+        logger.info("User authenticated successfully", email=email, user_id=user['id'])
+        
+        return {
+            "user": {
+                "id": user['id'],
+                "email": user['email'],
+                "name": user['name'],
+                "role": user['role'],
+                "department": user['department']
+            },
+            "access_token": access_token,
+            "token_type": "bearer"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error verifying code", error=str(e))
+        raise HTTPException(status_code=500, detail="Verification failed")
+
+@app.get("/auth/me", response_model=UserResponse)
+async def get_current_user(authorization: str = Header(None)):
+    """Get current user from token"""
+    try:
+        if not authorization or not authorization.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Invalid authorization header")
+        
+        token = authorization.split(" ")[1]
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        
+        if email is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        
+        user = await execute_single(
+            "SELECT id, email, name, role, department FROM users WHERE email = $1 AND active = true",
+            email
+        )
+        
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+        
+        return UserResponse(**user)
+        
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    except Exception as e:
+        logger.error("Error getting current user", error=str(e))
+        raise HTTPException(status_code=401, detail="Authentication failed")
+
+# API Health Check
 @app.get("/health")
 async def health_check():
     """Check database connectivity and stats"""
@@ -561,6 +776,7 @@ async def health_check():
         logger.error("Health check failed", error=str(e))
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
+# Container ID generation
 @app.get("/generate-container-id/")
 async def generate_container_id():
     """Generate a unique container ID following various patterns"""
@@ -614,12 +830,14 @@ async def generate_container_id():
 # Startup and shutdown events
 @app.on_event("startup")
 async def startup_event():
-    """Initialize database connection on startup"""
+    """Initialize database and Redis connections on startup"""
     try:
         await get_db_pool()
+        await get_redis_client()
         logger.info("Kinross Chemical Container Safety API started",
                    version="2.0.0",
                    database="PostgreSQL",
+                   redis="Connected",
                    api_docs="http://localhost:8000/docs")
     except Exception as e:
         logger.error("Failed to start application", error=str(e))

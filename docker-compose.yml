@@ -22,6 +22,23 @@ services:
       timeout: 5s
       retries: 5
 
+# Redis service
+  redis:
+    image: redis:7-alpine
+    container_name: kinross-chemical-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - kinross-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # FastAPI Backend
   backend:
     build:
@@ -30,10 +47,20 @@ services:
     container_name: kinross-chemical-api
     restart: unless-stopped
     environment:
-      - DATABASE_URL=postgresql://kinross_user:kinross_secure_2025@postgres:5432/kinross_chemical
-      - CORS_ORIGINS=http://localhost,http://localhost:80
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - CORS_ORIGINS=${CORS_ORIGINS}
       - API_HOST=0.0.0.0
       - API_PORT=8000
+      # SMTP configuration
+      - SMTP_SERVER=${SMTP_SERVER}
+      - SMTP_PORT=${SMTP_PORT}
+      - NOTIFICATION_FROM_EMAIL=${NOTIFICATION_FROM_EMAIL}
+      - SECRET_KEY=${SECRET_KEY}
+      # JWT Configuration
+      - SECRET_KEY=${SECRET_KEY}
+      - ALGORITHM=${ALGORITHM}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES}
     ports:
       - "8000:8000"
     volumes:
@@ -43,6 +70,8 @@ services:
       - kinross-network
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -72,6 +101,8 @@ services:
 
 volumes:
   postgres_data:
+    driver: local
+  redis_data:  # Redis volume
     driver: local
 
 networks:
