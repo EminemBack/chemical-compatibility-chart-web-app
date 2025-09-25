@@ -24,6 +24,10 @@ interface ContainerData {
   container: string;
   container_type: string;
   submitted_at: string;
+  status: string;
+  approval_comment?: string;
+  approved_by?: string;
+  approved_at?: string;
   hazards: Array<{name: string, hazard_class: string}>;
   pairs: Array<{
     id: number;
@@ -426,9 +430,11 @@ function App() {
   const [containerType, setContainerType] = useState('');
   const [hazardPairs, setHazardPairs] = useState<HazardPairData[]>([]);
   const [containers, setContainers] = useState<ContainerData[]>([]);
-  const [activeTab, setActiveTab] = useState<'form' | 'containers'>('form');
+  // UPDATE THIS EXISTING LINE (change 'containers' to 'approvals'):
+  const [activeTab, setActiveTab] = useState<'form' | 'containers' | 'approvals'>('form');
   const [loading, setLoading] = useState(false);
   const [pairStatuses, setPairStatuses] = useState<{[key: string]: any}>({});
+  const [pendingContainers, setPendingContainers] = useState<ContainerData[]>([]);
 
   // AUTH STATES:
   const [authState, setAuthState] = useState<AuthState>({
@@ -686,6 +692,68 @@ function App() {
     setShowAuth(true);
   };  
 
+  const fetchPendingContainers = async () => {
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(`${API_BASE}/containers/pending`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await response.json();
+      setPendingContainers(data);
+    } catch (error) {
+      console.error('Error fetching pending containers:', error);
+    }
+  };
+
+  const approveContainer = async (containerId: number, status: string, comment: string) => {
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(`${API_BASE}/containers/${containerId}/approve`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ container_id: containerId, status, comment })
+      });
+
+      if (response.ok) {
+        alert(`Container ${status} successfully!`);
+        fetchPendingContainers();
+        fetchContainers();
+      }
+    } catch (error) {
+      alert('Error processing approval');
+    }
+  };
+
+  const deleteContainer = async (containerId: number, containerName: string) => {
+    if (!confirm(`Are you sure you want to delete container ${containerName}? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(`${API_BASE}/containers/${containerId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        alert('Container deleted successfully');
+        fetchPendingContainers();
+        fetchContainers();
+      } else {
+        const error = await response.json();
+        alert(`Error: ${error.detail}`);
+      }
+    } catch (error) {
+      alert('Error deleting container');
+    }
+  };
+
   const submitContainer = async () => {
     if (!department.trim() || !location.trim() || !container.trim() || !containerType.trim()) {
       alert('Please fill in all required fields (Department, Location, Container, Type)');
@@ -705,6 +773,19 @@ function App() {
     }
 
     setLoading(true);
+
+    const payload = {
+      department,
+      location,
+      submitted_by: authState.user?.name || '', // Use authenticated user's name
+      container,
+      container_type: containerType,
+      selected_hazards: selectedHazards.map(h => h.id),
+      hazard_pairs: hazardPairs
+    };
+
+    console.log('Submitting payload:', payload); 
+
     try {
       const token = localStorage.getItem('access_token');
       const response = await fetch(`${API_BASE}/containers/`, {
@@ -713,16 +794,15 @@ function App() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({
-          department,
-          location,
-          submitted_by: authState.user?.name || '', // Use authenticated user's name
-          container,
-          container_type: containerType,
-          selected_hazards: selectedHazards.map(h => h.id),
-          hazard_pairs: hazardPairs
-        }),
+        body: JSON.stringify(payload),
       });
+
+      // ADD ERROR DETAILS:
+      if (!response.ok) {
+        const errorData = await response.text();
+        console.error('Backend error:', errorData);
+        throw new Error(`Server error: ${response.status}`);
+      }
 
       if (response.ok) {
         const result = await response.json();
@@ -904,6 +984,31 @@ function App() {
     </div>
   );
 
+  // Status Badge Component
+  const StatusBadge = ({ status }: { status: string }) => {
+    const getStatusStyle = () => {
+      switch (status) {
+        case 'approved': return { backgroundColor: '#e8f5e8', color: '#2e7d32', border: '2px solid #4caf50' };
+        case 'rejected': return { backgroundColor: '#ffebee', color: '#c62828', border: '2px solid #f44336' };
+        case 'pending': return { backgroundColor: '#fff3e0', color: '#f57c00', border: '2px solid #ff9800' };
+        default: return { backgroundColor: '#f5f5f5', color: '#666', border: '2px solid #ccc' };
+      }
+    };
+
+    return (
+      <span style={{
+        ...getStatusStyle(),
+        padding: '0.25rem 0.75rem',
+        borderRadius: '15px',
+        fontSize: '0.8rem',
+        fontWeight: '700',
+        textTransform: 'uppercase'
+      }}>
+        {status}
+      </span>
+    );
+  };
+
   return (
     <div className="App">
       {/* Show loading spinner while checking auth */}
@@ -961,7 +1066,6 @@ function App() {
             )}
 
             <nav>
-              {/* UPDATE NAVIGATION WITH ROLE CHECKS */}
               {authState.user && (authState.user.role === 'admin' || authState.user.role === 'user') && (
                 <button 
                   className={activeTab === 'form' ? 'active' : ''}
@@ -976,6 +1080,17 @@ function App() {
                   onClick={() => setActiveTab('containers')}
                 >
                   <span>View Assessments</span>
+                </button>
+              )}
+              {authState.user?.role === 'admin' && (
+                <button 
+                  className={activeTab === 'approvals' ? 'active' : ''}
+                  onClick={() => {
+                    setActiveTab('approvals');
+                    fetchPendingContainers();
+                  }}
+                >
+                  <span>Pending Approvals</span>
                 </button>
               )}
             </nav>
@@ -1320,7 +1435,10 @@ function App() {
                     containers.map(container => (
                       <div key={container.id} className="container-card">
                         <div className="container-header">
-                          <h3>Container #{container.id}</h3>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <h3>Container #{container.container}</h3>
+                            <StatusBadge status={container.status} />
+                          </div>
                           <div className="container-meta">
                             <span><strong>Department:</strong> {container.department}</span>
                             <span><strong>Location:</strong> {container.location}</span>
@@ -1328,6 +1446,12 @@ function App() {
                             <span><strong>Type:</strong> {container.container_type}</span>
                             <span><strong>Submitted by:</strong> {container.submitted_by}</span>
                             <span><strong>Date:</strong> {new Date(container.submitted_at).toLocaleDateString()}</span>
+                            {container.approved_by && (
+                              <span><strong>Approved by:</strong> {container.approved_by}</span>
+                            )}
+                            {container.approval_comment && (
+                              <span><strong>Comments:</strong> {container.approval_comment}</span>
+                            )}
                           </div>
                         </div>
                         
@@ -1390,6 +1514,169 @@ function App() {
                                 );
                               })
                             )}
+                          </div>
+                        </div>
+
+                        {/* ADD THE DELETE BUTTON HERE (inside the container-card but after container-pairs): */}
+                        {authState.user?.role === 'admin' && (
+                          <div style={{ marginTop: '1rem', textAlign: 'right', padding: '0 2rem 2rem 2rem' }}>
+                            <button
+                              onClick={() => deleteContainer(container.id, container.container)}
+                              style={{
+                                padding: '0.5rem 1rem',
+                                background: '#f44336',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                fontSize: '0.9rem',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              🗑️ Delete Container
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+            {activeTab === 'approvals' && authState.user?.role === 'admin' && (
+              <div className="containers-view">
+                <h2>Pending Container Approvals</h2>
+                <div className="containers-list">
+                  {pendingContainers.length === 0 ? (
+                    <div className="no-containers">
+                      <p>No pending approvals.</p>
+                    </div>
+                  ) : (
+                    pendingContainers.map(container => (
+                      <div key={container.id} className="container-card">
+                        <div className="container-header">
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <h3>Container #{container.container}</h3>
+                            <StatusBadge status={container.status} />
+                          </div>
+                          <div className="container-meta">
+                            <span><strong>Department:</strong> {container.department}</span>
+                            <span><strong>Location:</strong> {container.location}</span>
+                            <span><strong>Container:</strong> {container.container}</span>
+                            <span><strong>Submitted by:</strong> {container.submitted_by}</span>
+                            <span><strong>Date:</strong> {new Date(container.submitted_at).toLocaleDateString()}</span>
+                          </div>
+                        </div>
+                        
+                        <div className="container-hazards">
+                          <h4>Hazards Present:</h4>
+                          <div className="hazard-tags">
+                            {container.hazards.map((hazard, idx) => (
+                              <span key={idx} className="hazard-tag">
+                                Class {hazard.hazard_class} - {hazard.name}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+
+                        {container.pairs && container.pairs.length > 0 && (
+                          <div className="container-pairs">
+                            <h4>Compatibility Assessment:</h4>
+                            <div className="pairs-results">
+                              {container.pairs.map(pair => {
+                                const isolationStatus = getIsolationStatus(pair.is_isolated, pair.min_required_distance || 0);
+                                return (
+                                  <div key={pair.id} className="pair-result" style={getStatusColor(pair.status)}>
+                                    <div className="pair-names">
+                                      <span>{pair.hazard_a_name}</span>
+                                      <span className="separator">↔</span>
+                                      <span>{pair.hazard_b_name}</span>
+                                    </div>
+                                    <div className="pair-details">
+                                      <span><strong>Actual:</strong> {pair.distance}m</span>
+                                      <span>
+                                        <strong>Required:</strong> {
+                                          pair.min_required_distance === null 
+                                            ? 'Must Be Isolated' 
+                                            : `${pair.min_required_distance}m`
+                                        }
+                                      </span>
+                                      <span 
+                                        className="isolation-badge"
+                                        style={{ 
+                                          backgroundColor: isolationStatus.bgColor, 
+                                          color: isolationStatus.color,
+                                          padding: '0.25rem 0.75rem',
+                                          borderRadius: '15px',
+                                          fontSize: '0.8rem',
+                                          fontWeight: '700'
+                                        }}
+                                      >
+                                        {isolationStatus.text}
+                                      </span>
+                                      <span className={`status-badge ${pair.status}`}>
+                                        {getStatusText(pair.status)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        <div style={{ marginTop: '1.5rem', padding: '1rem', background: '#f9f9f9', borderRadius: '8px' }}>
+                          <h4>Admin Actions:</h4>
+                          <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', flexWrap: 'wrap' }}>
+                            <button
+                              onClick={() => {
+                                const comment = prompt('Enter approval comment (optional):') || '';
+                                approveContainer(container.id, 'approved', comment);
+                              }}
+                              style={{
+                                padding: '0.75rem 1.5rem',
+                                background: '#4caf50',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                fontWeight: '600'
+                              }}
+                            >
+                              ✅ Approve
+                            </button>
+                            <button
+                              onClick={() => {
+                                const comment = prompt('Enter rejection reason:') || 'Rejected';
+                                if (comment) {
+                                  approveContainer(container.id, 'rejected', comment);
+                                }
+                              }}
+                              style={{
+                                padding: '0.75rem 1.5rem',
+                                background: '#f44336',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                fontWeight: '600'
+                              }}
+                            >
+                              ❌ Reject
+                            </button>
+                            <button
+                              onClick={() => deleteContainer(container.id, container.container)}
+                              style={{
+                                padding: '0.75rem 1.5rem',
+                                background: '#9e9e9e',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                fontWeight: '600'
+                              }}
+                            >
+                              🗑️ Delete
+                            </button>
                           </div>
                         </div>
                       </div>

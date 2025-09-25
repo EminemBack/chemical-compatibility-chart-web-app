@@ -111,6 +111,10 @@ class ContainerSubmission(BaseModel):
     container_type: str
     selected_hazards: List[int]  # List of hazard category IDs
     hazard_pairs: List[HazardPairData]
+    # status: str
+    # approval_comment: Optional[str]
+    # approved_by: Optional[str]
+    # approved_at: Optional[datetime]
 
 class User(BaseModel):
     id: int
@@ -133,6 +137,11 @@ class UserResponse(BaseModel):
     name: str
     role: str
     department: str
+
+class ApprovalRequest(BaseModel):
+    container_id: int
+    status: str  # 'approved' or 'rejected'
+    comment: Optional[str] = None
 
 # Database functions
 async def get_db_pool():
@@ -388,6 +397,41 @@ async def send_verification_email(email: str, code: str, name: str):
         logger.error("Failed to send verification email", error=str(e), email=email)
         raise
 
+async def send_approval_email(email: str, name: str, container_id: str, status: str, comment: str):
+    """Send approval/rejection email"""
+    try:
+        status_text = "APPROVED" if status == "approved" else "REJECTED"
+        
+        msg = MIMEMultipart()
+        msg['From'] = NOTIFICATION_FROM_EMAIL
+        msg['To'] = email
+        msg['Subject'] = f"Container {container_id} - {status_text}"
+        
+        body = f"""
+            Hello {name},
+
+            Your container safety assessment for {container_id} has been {status_text}.
+
+            Status: {status_text}
+            Comments: {comment}
+
+            You can view the updated status in the Chemical Safety Assessment System.
+
+            Best regards,
+            Kinross Chemical Safety Team
+        """
+        
+        msg.attach(MIMEText(body, 'plain'))
+        
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        server.sendmail(NOTIFICATION_FROM_EMAIL, email, msg.as_string())
+        server.quit()
+        
+        logger.info("Approval email sent", email=email, status=status)
+        
+    except Exception as e:
+        logger.error("Failed to send approval email", error=str(e))
+
 def create_access_token(data: dict, expires_delta: timedelta = None):
     """Create JWT access token"""
     to_encode = data.copy()
@@ -439,9 +483,13 @@ async def get_hazard_categories():
         raise HTTPException(status_code=500, detail=f"Error fetching hazard categories: {str(e)}")
 
 @app.post("/containers/")
-async def submit_container(submission: ContainerSubmission):
+async def submit_container(submission: ContainerSubmission, authorization: str = Header(None)):
     """Submit a new container with hazards and pair distances"""
     try:
+        # AUTHENTICATION CHECK:
+        current_user = await get_current_user_from_token(authorization)        
+        logger.info("Container submission started", user=current_user['name'], submission_data=submission.dict())
+        
         logger.info("Submitting container", 
                    department=submission.department, 
                    location=submission.location,
@@ -454,11 +502,11 @@ async def submit_container(submission: ContainerSubmission):
             async with conn.transaction():
                 # Create container record
                 container_id = await conn.fetchval("""
-                    INSERT INTO containers (department, location, submitted_by, container, container_type)
-                    VALUES ($1, $2, $3, $4, $5)
+                    INSERT INTO containers (department, location, submitted_by, container, container_type, status)
+                    VALUES ($1, $2, $3, $4, $5, $6)
                     RETURNING id
                 """, submission.department, submission.location, submission.submitted_by, 
-                    submission.container, submission.container_type)
+                    submission.container, submission.container_type, 'pending')
                 
                 logger.info("Container created", container_id=container_id)
                 
@@ -528,16 +576,17 @@ async def get_containers(authorization: str = Header(None)):
         
         # Build query based on user role
         if current_user['role'] == 'admin':
-            # Admin sees all containers
-            container_query = "SELECT * FROM containers ORDER BY submitted_at DESC"
+            container_query = """SELECT id, department, location, submitted_by, container, container_type, 
+                                submitted_at, status, approval_comment, approved_by, approved_at 
+                                FROM containers ORDER BY submitted_at DESC"""
             container_params = []
         else:
-            # Regular users see only their own containers
-            container_query = "SELECT * FROM containers WHERE submitted_by = $1 ORDER BY submitted_at DESC"
+            container_query = """SELECT id, department, location, submitted_by, container, container_type, 
+                                submitted_at, status, approval_comment, approved_by, approved_at 
+                                FROM containers WHERE submitted_by = $1 ORDER BY submitted_at DESC"""
             container_params = [current_user['name']]
         
         container_rows = await execute_query(container_query, *container_params)
-        
         containers = []
         
         for container_row in container_rows:
@@ -556,9 +605,7 @@ async def get_containers(authorization: str = Header(None)):
             
             # Get pairs for this container
             pair_rows = await execute_query("""
-                SELECT hp.*, 
-                       ha.name as hazard_a_name, 
-                       hb.name as hazard_b_name
+                SELECT hp.*, ha.name as hazard_a_name, hb.name as hazard_b_name
                 FROM hazard_pairs hp
                 JOIN hazard_categories ha ON hp.hazard_category_a_id = ha.id
                 JOIN hazard_categories hb ON hp.hazard_category_b_id = hb.id
@@ -590,6 +637,10 @@ async def get_containers(authorization: str = Header(None)):
                 "container": container_row['container'],
                 "container_type": container_row['container_type'],
                 "submitted_at": container_row['submitted_at'].isoformat(),
+                "status": container_row.get('status', 'pending'),
+                "approval_comment": container_row.get('approval_comment'),
+                "approved_by": container_row.get('approved_by'),
+                "approved_at": container_row['approved_at'].isoformat() if container_row.get('approved_at') else None,
                 "hazards": hazards,
                 "pairs": pairs
             })
@@ -782,6 +833,162 @@ async def get_current_user(authorization: str = Header(None)):
     except Exception as e:
         logger.error("Error getting current user", error=str(e))
         raise HTTPException(status_code=401, detail="Authentication failed")
+
+# Containers Approval Process Functions
+@app.get("/containers/pending")
+async def get_pending_containers(authorization: str = Header(None)):
+    """Get pending containers for admin approval"""
+    try:
+        current_user = await get_current_user_from_token(authorization)
+        
+        if current_user['role'] != 'admin':
+            raise HTTPException(status_code=403, detail="Admin access required")
+        
+        container_rows = await execute_query("""
+            SELECT c.*, u.name as submitter_name, u.email as submitter_email
+            FROM containers c 
+            JOIN users u ON c.submitted_by = u.name
+            WHERE c.status = 'pending'
+            ORDER BY c.submitted_at ASC
+        """)
+        
+        containers = []
+        
+        for container_row in container_rows:
+            container_id = container_row['id']
+            
+            # Get hazards for this container
+            hazard_rows = await execute_query("""
+                SELECT h.name, h.hazard_class, h.subclass 
+                FROM hazard_categories h
+                JOIN container_hazards ch ON h.id = ch.hazard_category_id
+                WHERE ch.container_id = $1
+            """, container_id)
+            
+            hazards = [{"name": row['name'], "hazard_class": row['hazard_class'], "subclass": row['subclass']} 
+                      for row in hazard_rows]
+            
+            # Get pairs for this container
+            pair_rows = await execute_query("""
+                SELECT hp.*, ha.name as hazard_a_name, hb.name as hazard_b_name
+                FROM hazard_pairs hp
+                JOIN hazard_categories ha ON hp.hazard_category_a_id = ha.id
+                JOIN hazard_categories hb ON hp.hazard_category_b_id = hb.id
+                WHERE hp.container_id = $1
+            """, container_id)
+            
+            pairs = []
+            for pair_row in pair_rows:
+                min_dist = pair_row['min_required_distance']
+                if min_dist is None or min_dist == float('inf'):
+                    min_dist = None
+                
+                pairs.append({
+                    "id": pair_row['id'],
+                    "hazard_a_name": pair_row['hazard_a_name'],
+                    "hazard_b_name": pair_row['hazard_b_name'],
+                    "distance": pair_row['distance'],
+                    "is_isolated": bool(pair_row['is_isolated']),
+                    "min_required_distance": min_dist,
+                    "status": pair_row['status']
+                })
+            
+            containers.append({
+                "id": container_row['id'],
+                "department": container_row['department'],
+                "location": container_row['location'],
+                "submitted_by": container_row['submitted_by'],
+                "container": container_row['container'],
+                "container_type": container_row['container_type'],
+                "submitted_at": container_row['submitted_at'].isoformat(),
+                "status": container_row.get('status', 'pending'),
+                "approval_comment": container_row.get('approval_comment'),
+                "approved_by": container_row.get('approved_by'),
+                "approved_at": container_row['approved_at'].isoformat() if container_row.get('approved_at') else None,
+                "hazards": hazards,
+                "pairs": pairs
+            })
+        
+        return containers
+        
+    except Exception as e:
+        logger.error("Error fetching pending containers", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Error fetching pending containers: {str(e)}")
+
+@app.post("/containers/{container_id}/approve")
+async def approve_container(
+    container_id: int, 
+    approval: ApprovalRequest,
+    authorization: str = Header(None)
+):
+    """Approve or reject a container"""
+    try:
+        current_user = await get_current_user_from_token(authorization)
+        
+        if current_user['role'] != 'admin':
+            raise HTTPException(status_code=403, detail="Admin access required")
+        
+        # Update container status
+        await execute_command("""
+            UPDATE containers 
+            SET status = $1, approval_comment = $2, approved_by = $3, approved_at = $4
+            WHERE id = $5
+        """, approval.status, approval.comment, current_user['name'], datetime.utcnow(), container_id)
+        
+        # Get container and user details for email
+        container_data = await execute_single("""
+            SELECT c.container, u.email, u.name as user_name
+            FROM containers c 
+            JOIN users u ON c.submitted_by = u.name 
+            WHERE c.id = $1
+        """, container_id)
+        
+        if container_data:
+            # Send notification email
+            await send_approval_email(
+                container_data['email'],
+                container_data['user_name'],
+                container_data['container'],
+                approval.status,
+                approval.comment or "No additional comments"
+            )
+        
+        logger.info("Container approval processed", container_id=container_id, status=approval.status)
+        return {"message": f"Container {approval.status} successfully"}
+        
+    except Exception as e:
+        logger.error("Error processing approval", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Error processing approval: {str(e)}")
+
+# Delete Containers Endpoint
+@app.delete("/containers/{container_id}")
+async def delete_container(container_id: int, authorization: str = Header(None)):
+    """Delete a container (admin only)"""
+    try:
+        current_user = await get_current_user_from_token(authorization)
+        
+        if current_user['role'] != 'admin':
+            raise HTTPException(status_code=403, detail="Admin access required")
+        
+        # Check if container exists
+        container = await execute_single("SELECT * FROM containers WHERE id = $1", container_id)
+        if not container:
+            raise HTTPException(status_code=404, detail="Container not found")
+        
+        pool = await get_db_pool()
+        async with pool.acquire() as conn:
+            async with conn.transaction():
+                # Delete related records first (foreign key constraints)
+                await conn.execute("DELETE FROM hazard_pairs WHERE container_id = $1", container_id)
+                await conn.execute("DELETE FROM container_hazards WHERE container_id = $1", container_id)
+                await conn.execute("DELETE FROM containers WHERE id = $1", container_id)
+        
+        logger.info("Container deleted", container_id=container_id, deleted_by=current_user['name'])
+        return {"message": "Container deleted successfully"}
+        
+    except Exception as e:
+        logger.error("Error deleting container", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Error deleting container: {str(e)}")
 
 # API Health Check
 @app.get("/health")
