@@ -449,10 +449,17 @@ function App() {
   const [authLoading, setAuthLoading] = useState(false);
 
   useEffect(() => {
-    checkAuthStatus(); // Check auth first
-    fetchHazardCategories();
-    fetchContainers();
+    checkAuthStatus(); // Check auth first, don't call other functions yet
+    fetchHazardCategories(); // This can be called immediately since it doesn't require auth
+    // fetchContainers();
   }, []);
+
+  // ADD THIS NEW useEffect HERE:
+  useEffect(() => {
+    if (authState.user && !authState.loading) {
+      fetchContainers(); // Only fetch containers after user is authenticated
+    }
+  }, [authState.user, authState.loading]);
 
   // ADD THIS NEW useEffect:
   useEffect(() => {
@@ -879,6 +886,7 @@ function App() {
           <div>
             <label style={{ display: 'block', marginBottom: '1rem', fontWeight: '600' }}>
               Corporate Email Address:
+              {/* // Fix for email input (in AuthModal) */}
               <input
                 type="email"
                 value={authEmail}
@@ -892,7 +900,9 @@ function App() {
                   borderRadius: '6px',
                   fontSize: '1rem'
                 }}
-                onKeyPress={(e) => e.key === 'Enter' && requestVerificationCode()}
+                autoComplete="email"
+                autoFocus  // Add this line
+                onKeyPress={(e) => e.key === 'Enter' && authEmail && requestVerificationCode()}
               />
             </label>
             <button
@@ -922,6 +932,7 @@ function App() {
             </p>
             <label style={{ display: 'block', marginBottom: '1rem', fontWeight: '600' }}>
               Verification Code:
+              {/* // Fix for verification code input */}
               <input
                 type="text"
                 value={authCode}
@@ -938,6 +949,8 @@ function App() {
                   letterSpacing: '0.5rem'
                 }}
                 maxLength={6}
+                autoComplete="one-time-code"
+                autoFocus  // Add this line
                 onKeyPress={(e) => e.key === 'Enter' && authCode.length === 6 && verifyCode()}
               />
             </label>
@@ -1074,20 +1087,31 @@ function App() {
                   <span>New Container Assessment</span>
                 </button>
               )}
+
+              {/* UPDATE containers button: */}
               {authState.user && (
                 <button 
                   className={activeTab === 'containers' ? 'active' : ''}
-                  onClick={() => setActiveTab('containers')}
+                  onClick={() => {
+                    setActiveTab('containers');
+                    if (authState.user) {
+                      fetchContainers(); // Add this line
+                    }
+                  }}
                 >
                   <span>View Assessments</span>
                 </button>
               )}
+
+              {/* UPDATE approvals button: */}
               {authState.user?.role === 'admin' && (
                 <button 
                   className={activeTab === 'approvals' ? 'active' : ''}
                   onClick={() => {
                     setActiveTab('approvals');
-                    fetchPendingContainers();
+                    if (authState.user?.role === 'admin') {
+                      fetchPendingContainers(); // Add this line
+                    }
                   }}
                 >
                   <span>Pending Approvals</span>
