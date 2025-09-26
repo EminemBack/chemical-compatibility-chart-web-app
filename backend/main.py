@@ -1029,8 +1029,8 @@ async def generate_container_id():
         
         # Define possible patterns
         patterns = [
-            "CONT-{num}",
-            "CONTAINER-{letters}-{num}",
+            # "CONT-{num}",
+            # "CONTAINER-{letters}-{num}",
             "CONT-{num}-{letters}",
             "CONT-{num}-{letters2}"
         ]
