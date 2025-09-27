@@ -1,6 +1,4 @@
-
 services:
-  # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
     container_name: kinross-chemical-db
@@ -9,37 +7,25 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/init:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
     networks:
       - kinross-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U kinross_user -d kinross_chemical"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
-# Redis service
   redis:
     image: redis:7-alpine
     container_name: kinross-chemical-redis
     restart: unless-stopped
-    ports:
-      - "6379:6379"
     volumes:
       - redis_data:/data
+    ports:
+      - "6379:6379"
     networks:
       - kinross-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
-  # FastAPI Backend
   backend:
     build:
       context: ./backend
@@ -49,7 +35,7 @@ services:
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=${REDIS_URL}
-      - CORS_ORIGINS=${CORS_ORIGINS_DEV}
+      - CORS_ORIGINS=${CORS_ORIGINS_PROD}
       - API_HOST=0.0.0.0
       - API_PORT=8000
       # SMTP configuration
@@ -63,23 +49,12 @@ services:
       - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES}
     ports:
       - "8000:8000"
-    volumes:
-      - ./backend/uploads:/app/uploads
-      - ./backend/logs:/app/logs
+    depends_on:
+      - postgres
+      - redis
     networks:
       - kinross-network
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
-  # React Frontend with Nginx
   frontend:
     build:
       context: ./frontend
@@ -88,22 +63,14 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
+    depends_on:
+      - backend
     networks:
       - kinross-network
-    depends_on:
-      backend:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
 volumes:
   postgres_data:
-    driver: local
-  redis_data:  # Redis volume
-    driver: local
+  redis_data:
 
 networks:
   kinross-network:
