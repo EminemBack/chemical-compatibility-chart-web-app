@@ -63,7 +63,7 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY dist /usr/share/nginx/html
 
 # Copy favicon
-COPY dist/vite.svg /usr/share/nginx/html/
+COPY public/vite.svg /usr/share/nginx/html/
 
 # Set permissions
 RUN chown -R nginx:nginx /usr/share/nginx/html && \
