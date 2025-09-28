@@ -47,7 +47,7 @@ structlog.configure(
 logger = structlog.get_logger()
 
 # Database configuration
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://kinross_user:kinross_secure_2025@localhost:5432/kinross_chemical")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://kinross_user:kinross_secure_2025@localhost:5433/kinross_chemical")
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:80,http://localhost").split(",")
 
 # Redis configuration
