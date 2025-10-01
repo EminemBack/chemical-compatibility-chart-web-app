@@ -25,7 +25,11 @@ CREATE TABLE IF NOT EXISTS containers (
     submitted_by VARCHAR(255) NOT NULL,
     container VARCHAR(255) NOT NULL,
     container_type VARCHAR(50) NOT NULL,
-    submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+    approval_comment TEXT,
+    approved_by VARCHAR(255),
+    approved_at TIMESTAMP
 );
 
 -- Create container_hazards table (many-to-many relationship)

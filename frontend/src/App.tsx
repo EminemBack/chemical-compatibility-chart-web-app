@@ -644,7 +644,9 @@ function App() {
   };
 
   const requestVerificationCode = async () => {
+    console.log('API BASE:', API_BASE);
     setAuthLoading(true);
+
     try {
       const response = await fetch(`${API_BASE}/auth/request-code`, {
         method: 'POST',
