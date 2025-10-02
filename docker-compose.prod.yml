@@ -42,11 +42,11 @@ services:
       - SMTP_SERVER=${SMTP_SERVER}
       - SMTP_PORT=${SMTP_PORT}
       - NOTIFICATION_FROM_EMAIL=${NOTIFICATION_FROM_EMAIL}
-      - SECRET_KEY=${SECRET_KEY}
       # JWT Configuration
       - SECRET_KEY=${SECRET_KEY}
       - ALGORITHM=${ALGORITHM}
       - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES}
+      - PRODUCTION=true
     ports:
       - "8000:8000"
     depends_on:
@@ -58,7 +58,7 @@ services:
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.prod  # USE PRODUCTION DOCKERFILE
     container_name: kinross-chemical-web
     restart: unless-stopped
     ports:

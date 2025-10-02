@@ -47,8 +47,8 @@ structlog.configure(
 logger = structlog.get_logger()
 
 # Database configuration
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://kinross_user:kinross_secure_2025@localhost:5433/kinross_chemical")
-CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:80,http://localhost").split(",")
+DATABASE_URL = os.getenv("DATABASE_URL", "")
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "").split(",")
 
 # Redis configuration
 REDIS_URL = os.getenv("REDIS_URL", "")
@@ -67,13 +67,17 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "") )
 # Create uploads directory for hazard logos
 Path("uploads/hazard").mkdir(parents=True, exist_ok=True)
 
+# Detect production mode
+PRODUCTION = os.getenv("PRODUCTION", "false").lower() == "true"
+
 # FastAPI app
 app = FastAPI(
     title="Kinross Chemical Container Safety API",
     description="Chemical Container Safety Assessment System for Kinross Gold Corporation",
     version="2.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc"
+    docs_url="/docs" if not PRODUCTION else None,
+    redoc_url="/redoc" if not PRODUCTION else None,
+    openapi_url="/openapi.json" if not PRODUCTION else None
 )
 
 app.add_middleware(
