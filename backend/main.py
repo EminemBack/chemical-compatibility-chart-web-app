@@ -1024,49 +1024,37 @@ async def health_check():
 
 # Container ID generation
 @app.get("/generate-container-id/")
-async def generate_container_id():
-    """Generate a unique container ID following various patterns"""
+async def generate_container_id(department: str = None):
+    """Generate a unique container ID with department abbreviation"""
     try:
+        # Validate department abbreviation
+        if not department:
+            raise HTTPException(status_code=400, detail="Department abbreviation is required")
+        
         # Get all existing container IDs
         existing_containers = await execute_query("SELECT container FROM containers")
         existing_ids = {row['container'] for row in existing_containers}
         
-        # Define possible patterns
-        patterns = [
-            # "CONT-{num}",
-            # "CONTAINER-{letters}-{num}",
-            "CONT-{num}-{letters}",
-            "CONT-{num}-{letters2}"
-        ]
-        
-        # Generate random components
         import random
-        import string
-        
-        for _ in range(100):  # Try up to 100 times to find unique ID
-            pattern = random.choice(patterns)
-            num = random.randint(1001, 9999)
-            letters = ''.join(random.choices(string.ascii_uppercase, k=3))
-            letters2 = ''.join(random.choices(string.ascii_uppercase, k=3))
+        import time
+        # Try to generate unique ID (max 100 attempts)
+        for _ in range(100):
+            # Generate 4-digit random number
+            num = random.randint(1000, 9999)
             
-            # Generate ID based on pattern
-            if pattern == "CONT-{num}":
-                container_id = f"CONT-{num}"
-            elif pattern == "CONTAINER-{letters}-{num}":
-                container_id = f"CONTAINER-{letters}-{num}"
-            elif pattern == "CONT-{num}-{letters}":
-                container_id = f"CONT-{num}-{letters}"
-            elif pattern == "CONT-{num}-{letters2}":
-                container_id = f"CONT-{num}-{letters2}"
+            # Format: CONT-{4digits}-{DEPT}
+            container_id = f"CONT-{num}-{department}"
             
             # Check if unique
             if container_id not in existing_ids:
+                logger.info("Generated container ID", container_id=container_id, department=department)
                 return {"container_id": container_id}
         
-        # Fallback if all attempts failed
-        import time
+        # Fallback with timestamp if all random attempts failed
         timestamp = str(int(time.time()))[-4:]
-        fallback_id = f"CONT-{timestamp}-GEN"
+        fallback_id = f"CONT-{timestamp}-{department}"
+        
+        logger.warning("Using fallback container ID", container_id=fallback_id)
         return {"container_id": fallback_id}
         
     except Exception as e:

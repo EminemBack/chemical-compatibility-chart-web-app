@@ -83,10 +83,33 @@ const DEPARTMENTS = [
   'Technical Services'
 ];
 
+// ADD THIS NEW MAPPING
+const DEPARTMENT_ABBREV: { [key: string]: string } = {
+  'Environment': 'ENV',
+  'Project': 'PRO',
+  'External Relations': 'ER',
+  'Human Resources': 'HR',
+  'Community Relations': 'CR',
+  'Site Power and Electrical': 'POW',
+  'Health & Safety': 'H&S',
+  'IT': 'IT',
+  'Finance': 'FIN',
+  'Mobile Maintenance': 'MEM',
+  'Support Services': 'SS',
+  'Technical Services': 'TSE'
+};
+
 // Function to generate container ID
-const generateContainerID = async (): Promise<string> => {
+const generateContainerID = async (department: string): Promise<string> => {
+  // Check if department is selected
+  if (!department) {
+    return ''; // Return empty if no department selected
+  }
+
+  const deptAbbrev = DEPARTMENT_ABBREV[department] || 'UNK';
+  
   try {
-    const response = await fetch(`${API_BASE}/generate-container-id/`);
+    const response = await fetch(`${API_BASE}/generate-container-id/?department=${encodeURIComponent(deptAbbrev)}`);
     if (response.ok) {
       const data = await response.json();
       return data.container_id;
@@ -95,12 +118,9 @@ const generateContainerID = async (): Promise<string> => {
     console.error('Error generating container ID:', error);
   }
   
-  // Fallback generation
-  const timestamp = Date.now().toString().slice(-4);
-  const letters = String.fromCharCode(65 + Math.floor(Math.random() * 26)) + 
-                  String.fromCharCode(65 + Math.floor(Math.random() * 26)) + 
-                  String.fromCharCode(65 + Math.floor(Math.random() * 26));
-  return `CONT-${timestamp}-${letters}`;
+  // Fallback generation with department
+  const randomNum = String(Math.floor(1000 + Math.random() * 9000)); // 4 digits
+  return `CONT-${randomNum}-${deptAbbrev}`;
 };
 
 // Popup Compatibility Matrix Component
@@ -449,6 +469,15 @@ function App() {
   const [authCode, setAuthCode] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
 
+  // ADD THIS NEW STATE for hazard compatibility warnings
+  const [hazardWarnings, setHazardWarnings] = useState<{
+    [key: number]: {
+      status: 'safe' | 'warning' | 'danger';
+      message: string;
+      incompatibleWith?: number[];
+    }
+  }>({});
+
   useEffect(() => {
     checkAuthStatus(); // Check auth first, don't call other functions yet
     fetchHazardCategories(); // This can be called immediately since it doesn't require auth
@@ -464,11 +493,19 @@ function App() {
 
   // ADD THIS NEW useEffect:
   useEffect(() => {
-    // Generate container ID when component mounts
-    if (!container) {
-      generateContainerID().then(setContainer);
-    }
+    // // Generate container ID when component mounts
+    // if (!container) {
+    //   generateContainerID().then(setContainer);
+    // }
   }, []);
+
+  // ADD NEW useEffect to generate ID when department changes
+  useEffect(() => {
+    // Generate new container ID when department is selected
+    if (department && !container) {
+      generateContainerID(department).then(setContainer);
+    }
+  }, [department]); // Trigger when department changes
 
   const fetchHazardCategories = async () => {
     try {
@@ -534,17 +571,42 @@ function App() {
     setPairStatuses(newPairStatuses);
   };
 
+
   const handleHazardSelect = async (category: HazardCategory) => {
     const isSelected = selectedHazards.find(h => h.id === category.id);
     let newSelected: HazardCategory[];
+    let newWarnings = { ...hazardWarnings };
     
     if (isSelected) {
+      // DESELECTING - Remove hazard
       newSelected = selectedHazards.filter(h => h.id !== category.id);
+      
+      // Remove warnings for deselected hazard
+      delete newWarnings[category.id];
+      
+      // Recalculate warnings for remaining hazards
+      if (newSelected.length > 0) {
+        // Clear all warnings first
+        newWarnings = {};
+        
+        // Check each remaining hazard against others
+        for (const hazard of newSelected) {
+          const otherHazards = newSelected.filter(h => h.id !== hazard.id);
+          const warnings = await checkHazardCompatibility(hazard, otherHazards);
+          newWarnings = { ...newWarnings, ...warnings };
+        }
+      }
     } else {
+      // SELECTING - Add new hazard
       newSelected = [...selectedHazards, category];
+      
+      // Check compatibility of new hazard with existing ones
+      const warnings = await checkHazardCompatibility(category, selectedHazards);
+      newWarnings = { ...newWarnings, ...warnings };
     }
     
     setSelectedHazards(newSelected);
+    setHazardWarnings(newWarnings);
     await generateHazardPairs(newSelected);
   };
 
@@ -608,6 +670,88 @@ function App() {
       }
     }
     return { hasIsolation: false };
+  };
+
+  // ADD THIS NEW FUNCTION
+  const checkHazardCompatibility = async (
+    newHazard: HazardCategory, 
+    existingHazards: HazardCategory[]
+  ) => {
+    const warnings: {
+      [key: number]: {
+        status: 'safe' | 'warning' | 'danger';
+        message: string;
+        incompatibleWith?: number[];
+      }
+    } = {};
+
+    // If no existing hazards, new hazard is safe
+    if (existingHazards.length === 0) {
+      warnings[newHazard.id] = {
+        status: 'safe',
+        message: '✅ First hazard - OK to add'
+      };
+      return warnings;
+    }
+
+    // Check new hazard against all existing hazards
+    const incompatibleIds: number[] = [];
+    let worstStatus: 'safe' | 'warning' | 'danger' = 'safe';
+    let hasIsolationRequired = false;
+
+    for (const existingHazard of existingHazards) {
+      try {
+        const response = await fetch(
+          `${API_BASE}/preview-status/?hazard_a_id=${newHazard.id}&hazard_b_id=${existingHazard.id}&distance=0`,
+          { method: 'POST' }
+        );
+        
+        if (response.ok) {
+          const statusData = await response.json();
+          
+          // Check if isolation is required
+          if (statusData.is_isolated) {
+            hasIsolationRequired = true;
+            incompatibleIds.push(existingHazard.id);
+            worstStatus = 'danger';
+          } else if (statusData.min_required_distance >= 5 && worstStatus !== 'danger') {
+            worstStatus = 'warning';
+          }
+        }
+      } catch (error) {
+        console.error('Error checking compatibility:', error);
+      }
+    }
+
+    // Set warning for the new hazard
+    if (hasIsolationRequired) {
+      warnings[newHazard.id] = {
+        status: 'danger',
+        message: '🚫 CANNOT be stored with selected hazards',
+        incompatibleWith: incompatibleIds
+      };
+      
+      // Mark existing incompatible hazards as well
+      incompatibleIds.forEach(id => {
+        warnings[id] = {
+          status: 'danger',
+          message: '🚫 INCOMPATIBLE with new selection',
+          incompatibleWith: [newHazard.id]
+        };
+      });
+    } else if (worstStatus === 'warning') {
+      warnings[newHazard.id] = {
+        status: 'warning',
+        message: '⚠️ Requires separation distance',
+      };
+    } else {
+      warnings[newHazard.id] = {
+        status: 'safe',
+        message: '✅ Compatible with selected hazards',
+      };
+    }
+
+    return warnings;
   };
 
   // Authentication functions
@@ -842,17 +986,22 @@ function App() {
   };
 
   const resetForm = async () => {
+    const currentDept = department; // Save current department
+    
     setDepartment('');
     setLocation('');
-    // setSubmittedBy('');
     setContainerType('');
     setSelectedHazards([]);
     setHazardPairs([]);
     setPairStatuses({});
+    setContainer(''); // Clear container ID
     
-    // Generate new container ID when resetting
-    const newId = await generateContainerID();
-    setContainer(newId);
+    // If department was selected, regenerate ID after reset
+    if (currentDept) {
+      const newId = await generateContainerID(currentDept);
+      setContainer(newId);
+      setDepartment(currentDept); // Restore department
+    }
   };
 
   const AuthModal = () => (
@@ -1228,34 +1377,41 @@ function App() {
                             type="text"
                             value={container}
                             readOnly
-                            placeholder="Auto-generated container ID"
+                            placeholder={department ? "Auto-generated when department selected" : "Select department first"}
                             required
                             style={{ 
                               flex: 1,
                               backgroundColor: '#f5f5f5',
                               cursor: 'not-allowed',
-                              color: '#666'
+                              color: department ? '#666' : '#999'
                             }}
                           />
                           <button
                             type="button"
                             onClick={async () => {
-                              const newId = await generateContainerID();
+                              if (!department) {
+                                alert('Please select a department first');
+                                return;
+                              }
+                              const newId = await generateContainerID(department);
                               setContainer(newId);
                             }}
+                            disabled={!department}
                             style={{
                               padding: '0.75rem 1rem',
-                              background: 'var(--kinross-gold)',
+                              background: department ? 'var(--kinross-gold)' : '#ccc',
                               color: 'white',
                               border: 'none',
                               borderRadius: '6px',
-                              cursor: 'pointer',
+                              cursor: department ? 'pointer' : 'not-allowed',
                               fontSize: '0.9rem',
                               fontWeight: '600',
-                              whiteSpace: 'nowrap'
+                              whiteSpace: 'nowrap',
+                              opacity: department ? 1 : 0.6
                             }}
+                            title={department ? 'Generate new container ID' : 'Select department first'}
                           >
-                            Generate New
+                            🔄 Generate New
                           </button>
                         </div>
                         <small style={{ 
@@ -1265,7 +1421,10 @@ function App() {
                           marginTop: '0.25rem',
                           display: 'block'
                         }}>
-                          Container ID is auto-generated. Click "Generate New" for a different ID.
+                          {department 
+                            ? `Format: CONT-####-${DEPARTMENT_ABBREV[department]}` 
+                            : 'Container ID will be generated after selecting department'
+                          }
                         </small>
                       </label>
                     </div>
@@ -1290,30 +1449,141 @@ function App() {
                 <div className="hazard-selection">
                   <h3>Select DOT Hazard Classes Present in Container</h3>
                   <div className="ghs-grid">
-                    {hazardCategories.map(category => (
-                      <div
-                        key={category.id}
-                        className={`ghs-card ${selectedHazards.find(h => h.id === category.id) ? 'selected' : ''}`}
-                        onClick={() => handleHazardSelect(category)}
-                      >
-                        {category.logo_path ? (
-                          <img
-                            src={`${API_BASE}${category.logo_path}`}
-                            alt={category.name}
-                            className="ghs-logo"
-                          />
-                        ) : (
-                          <div className="ghs-symbol">Class {category.hazard_class}</div>
-                        )}
-                        <div className="ghs-name">{category.name}</div>
-                        <div className="ghs-code">Class {category.subclass}</div>
-                        {category.description && (
-                          <div className="ghs-description">{category.description}</div>
-                        )}
-                      </div>
-                    ))}
+                    {hazardCategories.map(category => {
+                      const isSelected = selectedHazards.find(h => h.id === category.id);
+                      const warning = hazardWarnings[category.id];
+                      
+                      return (
+                        <div
+                          key={category.id}
+                          className={`ghs-card ${isSelected ? 'selected' : ''} ${warning ? `warning-${warning.status}` : ''}`}
+                          onClick={() => handleHazardSelect(category)}
+                          style={{
+                            // Add border colors based on warning status
+                            borderColor: warning 
+                              ? warning.status === 'danger' 
+                                ? '#f44336' 
+                                : warning.status === 'warning' 
+                                  ? '#ff9800' 
+                                  : '#4caf50'
+                              : undefined,
+                            borderWidth: warning ? '3px' : undefined,
+                          }}
+                        >
+                          {category.logo_path ? (
+                            <img
+                              src={`${API_BASE}${category.logo_path}`}
+                              alt={category.name}
+                              className="ghs-logo"
+                              style={{
+                                // Add overlay effect for danger status
+                                opacity: warning?.status === 'danger' ? 0.5 : 1,
+                                filter: warning?.status === 'danger' ? 'grayscale(50%)' : 'none'
+                              }}
+                            />
+                          ) : (
+                            <div className="ghs-symbol">Class {category.hazard_class}</div>
+                          )}
+                          
+                          <div className="ghs-name">{category.name}</div>
+                          <div className="ghs-code">Class {category.subclass}</div>
+                          
+                          {category.description && (
+                            <div className="ghs-description">{category.description}</div>
+                          )}
+                          
+                          {/* ADD WARNING MESSAGE */}
+                          {warning && (
+                            <div 
+                              className="ghs-warning-message"
+                              style={{
+                                marginTop: '0.75rem',
+                                padding: '0.5rem',
+                                borderRadius: '6px',
+                                fontSize: '0.75rem',
+                                fontWeight: '700',
+                                textAlign: 'center',
+                                backgroundColor: 
+                                  warning.status === 'danger' 
+                                    ? '#ffebee' 
+                                    : warning.status === 'warning' 
+                                      ? '#fff3e0' 
+                                      : '#e8f5e9',
+                                color: 
+                                  warning.status === 'danger' 
+                                    ? '#c62828' 
+                                    : warning.status === 'warning' 
+                                      ? '#e65100' 
+                                      : '#2e7d32',
+                                border: `2px solid ${
+                                  warning.status === 'danger' 
+                                    ? '#f44336' 
+                                    : warning.status === 'warning' 
+                                      ? '#ff9800' 
+                                      : '#4caf50'
+                                }`,
+                                animation: warning.status === 'danger' ? 'pulse 2s infinite' : 'none'
+                              }}
+                            >
+                              {warning.message}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
+
+                {/* Compatibility Summary Alert */}
+                {selectedHazards.length > 0 && (
+                  <div 
+                    className="compatibility-summary-alert"
+                    style={{
+                      marginTop: '2rem',
+                      padding: '1.5rem',
+                      borderRadius: '10px',
+                      border: '2px solid',
+                      borderColor: Object.values(hazardWarnings).some(w => w.status === 'danger')
+                        ? '#f44336'
+                        : Object.values(hazardWarnings).some(w => w.status === 'warning')
+                          ? '#ff9800'
+                          : '#4caf50',
+                      backgroundColor: Object.values(hazardWarnings).some(w => w.status === 'danger')
+                        ? '#ffebee'
+                        : Object.values(hazardWarnings).some(w => w.status === 'warning')
+                          ? '#fff3e0'
+                          : '#e8f5e9',
+                    }}
+                  >
+                    <h4 style={{
+                      margin: '0 0 1rem 0',
+                      color: Object.values(hazardWarnings).some(w => w.status === 'danger')
+                        ? '#c62828'
+                        : Object.values(hazardWarnings).some(w => w.status === 'warning')
+                          ? '#e65100'
+                          : '#2e7d32',
+                    }}>
+                      {Object.values(hazardWarnings).some(w => w.status === 'danger')
+                        ? '🚫 INCOMPATIBLE HAZARDS DETECTED'
+                        : Object.values(hazardWarnings).some(w => w.status === 'warning')
+                          ? '⚠️ SEPARATION REQUIRED'
+                          : '✅ ALL HAZARDS COMPATIBLE'
+                      }
+                    </h4>
+                    <p style={{
+                      margin: 0,
+                      fontSize: '0.95rem',
+                      color: '#666',
+                    }}>
+                      {Object.values(hazardWarnings).some(w => w.status === 'danger')
+                        ? 'Some selected hazards MUST BE ISOLATED and cannot be stored in the same container. Please deselect incompatible hazards or create separate containers.'
+                        : Object.values(hazardWarnings).some(w => w.status === 'warning')
+                          ? 'Selected hazards can be stored together but require minimum separation distances. Continue to distance assessment for details.'
+                          : 'All selected hazards are compatible and can be stored together. Continue to specify exact storage distances.'
+                      }
+                    </p>
+                  </div>
+                )}
 
                 {/* Matrix Popup Button */}
                 <MatrixPopupButton
