@@ -31,6 +31,10 @@ CREATE TABLE IF NOT EXISTS containers (
     approved_by VARCHAR(255),
     approved_at TIMESTAMP
 );
+-- ALTER TABLE containers ADD status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected'));
+-- ALTER TABLE containers ADD approval_comment TEXT;
+-- ALTER TABLE containers ADD approved_by VARCHAR(255);
+-- ALTER TABLE containers ADD approved_at TIMESTAMP;
 
 -- Create container_hazards table (many-to-many relationship)
 CREATE TABLE IF NOT EXISTS container_hazards (
