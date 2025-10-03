@@ -1062,8 +1062,9 @@ function App() {
         background: 'white',
         borderRadius: '12px',
         padding: '2rem',
-        minWidth: '400px',
-        maxWidth: '500px',
+        width: '450px',                // ✅ Changed from minWidth/maxWidth
+        maxWidth: '90vw',              // ✅ Responsive
+        boxSizing: 'border-box',       // ✅ Added
         boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
       }}>
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
@@ -1077,7 +1078,12 @@ function App() {
 
         {authStep === 'email' ? (
           <div>
-            <label style={{ display: 'block', marginBottom: '1rem', fontWeight: '600' }}>
+            <label style={{ 
+                display: 'block', 
+                marginBottom: '0.875rem',      // ✅ Reduced from 1rem
+                fontWeight: '600',
+                fontSize: '0.95rem'            // ✅ Added
+            }}>
               Corporate Email Address:
               {/* // Fix for email input (in AuthModal) */}
               <input
@@ -1087,11 +1093,12 @@ function App() {
                 placeholder="your.name@kinross.com"
                 style={{
                   width: '100%',
-                  padding: '1rem',
+                  padding: '0.875rem',           // ✅ Reduced from 1rem
                   marginTop: '0.5rem',
                   border: '2px solid var(--kinross-medium-gray)',
                   borderRadius: '6px',
-                  fontSize: '1rem'
+                  fontSize: '0.95rem',           // ✅ Reduced from 1rem
+                  boxSizing: 'border-box'        // ✅ Added for better sizing
                 }}
                 autoComplete="email"
                 autoFocus  // Add this line
@@ -1396,7 +1403,12 @@ function App() {
                           style={{ 
                             backgroundColor: '#f5f5f5',
                             cursor: 'not-allowed',
-                            color: '#666'
+                            color: '#666',
+                            fontSize: '0.9rem',              // ✅ ADD
+                            padding: '0.875rem',             // ✅ ADD
+                            overflow: 'hidden',              // ✅ ADD
+                            textOverflow: 'ellipsis',        // ✅ ADD
+                            whiteSpace: 'nowrap'             // ✅ ADD
                           }}
                         />
                         <small style={{ 
@@ -1424,7 +1436,14 @@ function App() {
                               flex: 1,
                               backgroundColor: '#f5f5f5',
                               cursor: 'not-allowed',
-                              color: department ? '#666' : '#999'
+                              color: department ? '#666' : '#999',
+                              fontSize: '0.85rem',             // ✅ ADD - smaller font
+                              fontWeight: '600',               // ✅ ADD - bold
+                              letterSpacing: '-0.02em',        // ✅ ADD - tighter spacing
+                              padding: '0.875rem',             // ✅ ADD - adjusted padding
+                              overflow: 'hidden',              // ✅ ADD
+                              textOverflow: 'ellipsis',        // ✅ ADD
+                              whiteSpace: 'nowrap'             // ✅ ADD
                             }}
                           />
                           <button

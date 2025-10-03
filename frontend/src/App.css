@@ -155,8 +155,8 @@
 
 .form-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));  /* ✅ Changed from 280px */
+  gap: 1.25rem;
 }
 
 .form-field label {
@@ -176,6 +176,24 @@
   font-size: 1rem;
   transition: all 0.3s ease;
   background: var(--kinross-white);
+  box-sizing: border-box;        /* ADD THIS */
+  min-width: 0;                  /* ADD THIS - prevents overflow */
+}
+
+/* ✅ ADD THIS NEW RULE for readonly inputs: */
+.form-field input[readonly] {
+  font-size: 0.9rem;             /* Slightly smaller for long IDs */
+  padding: 0.875rem;             /* Adjust padding */
+  overflow: hidden;              /* Hide overflow */
+  text-overflow: ellipsis;       /* Show ... for overflow */
+  white-space: nowrap;           /* Keep on one line */
+}
+
+/* ✅ ADD THIS NEW RULE specifically for Container ID field: */
+.form-field input[readonly][value*="CONT-"] {
+  font-size: 0.85rem;            /* Even smaller for container IDs */
+  letter-spacing: -0.02em;       /* Tighter spacing */
+  font-weight: 600;              /* Bold for better readability */
 }
 
 .form-field input:focus,
@@ -2046,4 +2064,24 @@
 
 .matrix-popup-table-container::-webkit-scrollbar-corner {
   background: var(--kinross-light-gray);
+}
+
+@media (max-width: 1200px) {
+  .form-grid {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .form-grid {
+    grid-template-columns: 1fr;  /* Single column on mobile */
+    gap: 1rem;
+  }
+  
+  .form-field input,
+  .form-field select {
+    font-size: 0.95rem;
+    padding: 0.875rem;
+  }
 }
