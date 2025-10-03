@@ -656,7 +656,7 @@ function App() {
     }
   };
 
-  // ADD THIS NEW FUNCTION HERE: to isolate required hazards which can not goes with each other
+  // THIS FUNCTION: isolate required hazards which can not goes with each other
   const hasIsolationRequired = () => {
     for (const pair of hazardPairs) {
       const pairKey = `${pair.hazard_category_a_id}-${pair.hazard_category_b_id}`;
@@ -670,6 +670,41 @@ function App() {
       }
     }
     return { hasIsolation: false };
+  };
+
+  // THIS FUNCTION: check if any distance is geq to required distance or eq zero
+  const hasEmptyDistances = () => {
+    // If no pairs, no validation needed
+    if (hazardPairs.length === 0) {
+      return false;
+    }
+    
+    // Check each pair for:
+    // 1. Empty or zero distance
+    // 2. Distance less than required minimum
+    for (const pair of hazardPairs) {
+      const pairKey = `${pair.hazard_category_a_id}-${pair.hazard_category_b_id}`;
+      const status = pairStatuses[pairKey];
+      
+      // Check if distance is empty or zero
+      // if (!pair.distance || pair.distance === 0) {
+      //   return true;
+      // }
+      
+      // Check if status is 'danger' or 'caution' (means distance is insufficient)
+      if (status && (status.status === 'danger' || status.status === 'caution')) {
+        return true;
+      }
+      
+      // Alternative: Check if distance is less than required minimum
+      if (status && status.min_required_distance) {
+        if (pair.distance < status.min_required_distance) {
+          return true;
+        }
+      }
+    }
+    
+    return false;
   };
 
   // ADD THIS NEW FUNCTION
@@ -919,10 +954,16 @@ function App() {
       return;
     }
 
-    // ADD THIS VALIDATION CHECK:
+    // VALIDATION CHECK:
     const isolationCheck = hasIsolationRequired();
     if (isolationCheck.hasIsolation) {
       alert(`⚠️ SUBMISSION BLOCKED\n\nThe hazard pair "${isolationCheck.hazardA}" and "${isolationCheck.hazardB}" MUST BE ISOLATED and cannot be stored in the same container.\n\nThese chemicals require complete separation and cannot be combined in any container configuration.`);
+      return;
+    }
+
+    // VALIDATION CHECK:
+    if (hasEmptyDistances()) {
+      alert('⚠️ SUBMISSION BLOCKED\n\nOne or more hazard pairs do not meet the required safety distance.\n\nPlease ensure:\n• All distance fields are filled (greater than 0)\n• All distances meet or exceed the minimum required distance\n• No pairs show DANGER or CAUTION status\n\nAdjust the distances until all pairs show SAFE status.');
       return;
     }
 
@@ -1628,6 +1669,12 @@ function App() {
                                     value={pair.distance}
                                     onChange={(e) => updatePairDistance(index, parseFloat(e.target.value) || 0)}
                                     placeholder="0.0"
+                                    // STYLE ATTRIBUTE:
+                                    style={{
+                                      borderColor: (!pair.distance || pair.distance === 0) ? '#ff9800' : undefined,
+                                      borderWidth: (!pair.distance || pair.distance === 0) ? '3px' : undefined,
+                                      backgroundColor: (!pair.distance || pair.distance === 0) ? '#fff3e0' : undefined
+                                    }}
                                   />
                                 </label>
                               </div>
@@ -1672,7 +1719,7 @@ function App() {
                       </div>
                     )}
                     
-                    {/* ADD THIS ISOLATION WARNING */}
+                    {/* ISOLATION WARNING */}
                     {(() => {
                       const isolationCheck = hasIsolationRequired();
                       if (isolationCheck.hasIsolation) {
@@ -1698,6 +1745,26 @@ function App() {
                       return null;
                     })()}
                     
+                    {/* WARNING FOR EMPTY DISTANCES: */}
+                    {hasEmptyDistances() && (
+                      <div className="distance-warning" style={{
+                        background: '#fff3e0',
+                        border: '2px solid #ff9800',
+                        borderRadius: '10px',
+                        padding: '1.5rem',
+                        marginBottom: '2rem',
+                        textAlign: 'center'
+                      }}>
+                        <h3 style={{ color: '#e65100', margin: '0 0 1rem 0' }}>
+                          ⚠️ INSUFFICIENT SAFETY DISTANCES
+                        </h3>
+                        <p style={{ color: '#f57c00', margin: '0', fontWeight: '600' }}>
+                          One or more hazard pairs do not meet the required minimum safety distance. 
+                          Please increase the distances until all pairs show "SAFE" status (green) above.
+                        </p>
+                      </div>
+                    )}
+                    
                     <div className="form-actions">
                       <button className="reset-btn" onClick={resetForm} type="button">
                         Reset Form
@@ -1705,10 +1772,10 @@ function App() {
                       <button
                         className="submit-btn"
                         onClick={submitContainer}
-                        disabled={loading || hasIsolationRequired().hasIsolation}
+                        disabled={loading || hasIsolationRequired().hasIsolation || hasEmptyDistances()}
                         style={{
-                          opacity: hasIsolationRequired().hasIsolation ? 0.4 : 1,
-                          cursor: hasIsolationRequired().hasIsolation ? 'not-allowed' : 'pointer'
+                          opacity: (hasIsolationRequired().hasIsolation || hasEmptyDistances()) ? 0.4 : 1,
+                          cursor: (hasIsolationRequired().hasIsolation || hasEmptyDistances()) ? 'not-allowed' : 'pointer'
                         }}
                       >
                         {loading ? 'Submitting Assessment...' : 'Submit Safety Assessment'}
