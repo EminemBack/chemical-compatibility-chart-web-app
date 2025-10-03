@@ -2066,6 +2066,7 @@
   background: var(--kinross-light-gray);
 }
 
+/* Responsive - Adjusts on smaller screens */
 @media (max-width: 1200px) {
   .form-grid {
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
