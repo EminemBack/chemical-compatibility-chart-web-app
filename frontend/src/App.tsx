@@ -441,6 +441,149 @@ const MatrixPopupButton: React.FC<{
   );
 };
 
+// Approval requires a comment of at least 10 characters
+const ApprovalCommentModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onSubmit: (comment: string) => void;
+  type: 'approve' | 'reject';
+}> = ({ isOpen, onClose, onSubmit, type }) => {
+  const [comment, setComment] = React.useState('');
+  const [error, setError] = React.useState('');
+
+  if (!isOpen) return null;
+
+  const handleSubmit = () => {
+    const trimmedComment = comment.trim();
+    
+    if (trimmedComment.length === 0) {
+      setError('Comment is required');
+      return;
+    }
+    
+    if (trimmedComment.length < 10) {
+      setError(`Comment must be at least 10 characters (current: ${trimmedComment.length})`);
+      return;
+    }
+    
+    onSubmit(trimmedComment);
+    setComment('');
+    setError('');
+    onClose();
+  };
+
+  return (
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: 'rgba(30, 58, 95, 0.8)',
+      backdropFilter: 'blur(5px)',
+      zIndex: 1000,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '2rem'
+    }} onClick={onClose}>
+      <div style={{
+        background: 'white',
+        borderRadius: '12px',
+        padding: '2rem',
+        maxWidth: '600px',
+        width: '100%',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+      }} onClick={(e) => e.stopPropagation()}>
+        <h3 style={{ 
+          margin: '0 0 1rem 0', 
+          color: type === 'approve' ? '#4caf50' : '#f44336' 
+        }}>
+          {type === 'approve' ? '✅ Approve Container' : '❌ Reject Container'}
+        </h3>
+        
+        <p style={{ margin: '0 0 1.5rem 0', color: '#666', fontSize: '0.95rem' }}>
+          Please provide a detailed comment explaining your decision (minimum 10 characters):
+        </p>
+        
+        <textarea
+          value={comment}
+          onChange={(e) => {
+            setComment(e.target.value);
+            setError('');
+          }}
+          placeholder={
+            type === 'approve' 
+              ? 'Example: All hazard distances meet safety requirements. Container layout approved for storage in designated area.'
+              : 'Example: Flammable liquid and oxidizer distances insufficient. Requires minimum 5m separation per DOT regulations.'
+          }
+          style={{
+            width: '100%',
+            minHeight: '120px',
+            padding: '1rem',
+            border: error ? '2px solid #f44336' : '2px solid #ccc',
+            borderRadius: '6px',
+            fontSize: '1rem',
+            fontFamily: 'inherit',
+            resize: 'vertical',
+            marginBottom: '0.5rem',
+            boxSizing: 'border-box'
+          }}
+          autoFocus
+        />
+        
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          marginBottom: '1rem'
+        }}>
+          <span style={{ 
+            fontSize: '0.85rem', 
+            color: comment.trim().length < 10 ? '#f44336' : '#4caf50' 
+          }}>
+            {comment.trim().length} / 10 characters minimum
+          </span>
+          {error && <span style={{ fontSize: '0.85rem', color: '#f44336' }}>{error}</span>}
+        </div>
+        
+        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+          <button
+            onClick={onClose}
+            style={{
+              padding: '0.75rem 1.5rem',
+              background: 'transparent',
+              color: '#666',
+              border: '2px solid #ccc',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontWeight: '600'
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={comment.trim().length < 10}
+            style={{
+              padding: '0.75rem 1.5rem',
+              background: type === 'approve' ? '#4caf50' : '#f44336',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: comment.trim().length < 10 ? 'not-allowed' : 'pointer',
+              fontWeight: '600',
+              opacity: comment.trim().length < 10 ? 0.5 : 1
+            }}
+          >
+            {type === 'approve' ? 'Approve Container' : 'Reject Container'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 function App() {
   const [hazardCategories, setHazardCategories] = useState<HazardCategory[]>([]);
   const [selectedHazards, setSelectedHazards] = useState<HazardCategory[]>([]);
@@ -477,6 +620,12 @@ function App() {
       incompatibleWith?: number[];
     }
   }>({});
+
+  const [approvalModal, setApprovalModal] = useState<{ isOpen: boolean; type: 'approve' | 'reject'; containerId: number }>({
+    isOpen: false,
+    type: 'approve',
+    containerId: 0
+  });
 
   useEffect(() => {
     checkAuthStatus(); // Check auth first, don't call other functions yet
@@ -895,6 +1044,17 @@ function App() {
   };
 
   const approveContainer = async (containerId: number, status: string, comment: string) => {
+    // FRONTEND VALIDATION (belt and suspenders)
+    if (!comment || comment.trim().length === 0) {
+      alert('❌ Error: Comment is required');
+      return;
+    }
+    
+    if (comment.trim().length < 10) {
+      alert('❌ Error: Comment must be at least 10 characters long');
+      return;
+    }
+
     try {
       const token = localStorage.getItem('access_token');
       const response = await fetch(`${API_BASE}/containers/${containerId}/approve`, {
@@ -903,16 +1063,21 @@ function App() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ container_id: containerId, status, comment })
+        body: JSON.stringify({ container_id: containerId, status, comment: comment.trim() })
       });
 
+      // BETTER ERROR HANDLING
       if (response.ok) {
-        alert(`Container ${status} successfully!`);
+        alert(`✅ Container ${status} successfully!\n\nComment: "${comment.trim()}"`);
         fetchPendingContainers();
         fetchContainers();
+      } else {
+        const errorData = await response.json();
+        alert(`❌ Error: ${errorData.detail || 'Failed to process approval'}`);
       }
     } catch (error) {
-      alert('Error processing approval');
+      console.error('Error processing approval:', error);
+      alert('❌ Error processing approval. Please try again.');
     }
   };
 
@@ -2084,10 +2249,11 @@ function App() {
                           <h4>Admin Actions:</h4>
                           <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', flexWrap: 'wrap' }}>
                             <button
-                              onClick={() => {
-                                const comment = prompt('Enter approval comment (optional):') || '';
-                                approveContainer(container.id, 'approved', comment);
-                              }}
+                              onClick={() => setApprovalModal({ 
+                                isOpen: true, 
+                                type: 'approve', 
+                                containerId: container.id 
+                              })}
                               style={{
                                 padding: '0.75rem 1.5rem',
                                 background: '#4caf50',
@@ -2101,12 +2267,11 @@ function App() {
                               ✅ Approve
                             </button>
                             <button
-                              onClick={() => {
-                                const comment = prompt('Enter rejection reason:') || 'Rejected';
-                                if (comment) {
-                                  approveContainer(container.id, 'rejected', comment);
-                                }
-                              }}
+                              onClick={() => setApprovalModal({ 
+                                isOpen: true, 
+                                type: 'reject', 
+                                containerId: container.id 
+                              })}
                               style={{
                                 padding: '0.75rem 1.5rem',
                                 background: '#f44336',
@@ -2146,6 +2311,19 @@ function App() {
           <footer className="kinross-footer">
             <p>© 2025 Kinross Gold Corporation - Chemical Container Safety Management System</p>
           </footer>
+
+          <ApprovalCommentModal
+            isOpen={approvalModal.isOpen}
+            onClose={() => setApprovalModal({ ...approvalModal, isOpen: false })}
+            onSubmit={(comment) => {
+              approveContainer(
+                approvalModal.containerId, 
+                approvalModal.type === 'approve' ? 'approved' : 'rejected', 
+                comment
+              );
+            }}
+            type={approvalModal.type}
+          />
         </>
       )}
     </div>

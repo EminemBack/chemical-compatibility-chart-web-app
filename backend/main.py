@@ -931,13 +931,27 @@ async def approve_container(
         
         if current_user['role'] != 'admin':
             raise HTTPException(status_code=403, detail="Admin access required")
+
+        # VALIDATION - Check for non-empty comment
+        if not approval.comment or approval.comment.strip() == "":
+            raise HTTPException(
+                status_code=400, 
+                detail="Comment is required. Please provide a reason for approval or rejection."
+            )
         
+        # VALIDATION - Minimum comment length
+        if len(approval.comment.strip()) < 10:
+            raise HTTPException(
+                status_code=400,
+                detail="Comment must be at least 10 characters long. Please provide a detailed reason."
+            )
+                
         # Update container status
         await execute_command("""
             UPDATE containers 
             SET status = $1, approval_comment = $2, approved_by = $3, approved_at = $4
             WHERE id = $5
-        """, approval.status, approval.comment, current_user['name'], datetime.utcnow(), container_id)
+        """, approval.status, approval.comment.strip(), current_user['name'], datetime.utcnow(), container_id)
         
         # Get container and user details for email
         container_data = await execute_single("""
@@ -954,12 +968,14 @@ async def approve_container(
                 container_data['user_name'],
                 container_data['container'],
                 approval.status,
-                approval.comment or "No additional comments"
+                approval.comment.strip()  # Use trimmed comment
             )
         
-        logger.info("Container approval processed", container_id=container_id, status=approval.status)
+        logger.info("Container approval processed", container_id=container_id, status=approval.status, comment_length=len(approval.comment.strip()))
         return {"message": f"Container {approval.status} successfully"}
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Error processing approval", error=str(e))
         raise HTTPException(status_code=500, detail=f"Error processing approval: {str(e)}")
