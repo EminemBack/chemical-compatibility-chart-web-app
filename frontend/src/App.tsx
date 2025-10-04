@@ -1505,6 +1505,79 @@ function App() {
                   </div>
                 </div>
 
+                {/* SDS Quick Access */}
+                <div className="sds-section" style={{
+                  marginBottom: '2rem',
+                  padding: '1.5rem',
+                  background: 'var(--kinross-light-gray)',
+                  borderRadius: '10px',
+                  borderLeft: '5px solid #2196F3'
+                }}>
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'space-between',
+                    gap: '1.5rem',
+                    flexWrap: 'wrap'
+                  }}>
+                    <div style={{ flex: 1, minWidth: '250px' }}>
+                      <h3 style={{ 
+                        color: 'var(--kinross-navy)', 
+                        margin: '0 0 0.5rem 0',
+                        fontSize: '1.3rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.75rem'
+                      }}>
+                        📋 Safety Data Sheet (SDS) Lookup
+                      </h3>
+                      <p style={{ 
+                        margin: 0, 
+                        color: 'var(--kinross-dark-gray)',
+                        fontSize: '1rem',
+                        lineHeight: '1.5'
+                      }}>
+                        Before selecting hazard classes, consult the SDS database to identify 
+                        the correct DOT hazard classifications for your chemicals.
+                      </p>
+                    </div>
+                    <a
+                      href="https://chemicalsafety.com/sds-search/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        padding: '1rem 2rem',
+                        background: 'linear-gradient(135deg, var(--kinross-gold), var(--kinross-dark-gold))',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '8px',
+                        fontSize: '1.1rem',
+                        fontWeight: '700',
+                        textDecoration: 'none',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.75rem',
+                        cursor: 'pointer',
+                        transition: 'all 0.3s ease',
+                        boxShadow: '0 4px 15px rgba(212, 165, 83, 0.3)',
+                        whiteSpace: 'nowrap'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.transform = 'translateY(-2px)';
+                        e.currentTarget.style.boxShadow = '0 6px 20px rgba(212, 165, 83, 0.4)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = 'translateY(0)';
+                        e.currentTarget.style.boxShadow = '0 4px 15px rgba(212, 165, 83, 0.3)';
+                      }}
+                    >
+                      <span style={{ fontSize: '1.3rem' }}>🔍</span>
+                      <span>Open SDS Search</span>
+                      <span style={{ fontSize: '1rem' }}>↗</span>
+                    </a>
+                  </div>
+                </div>
+
                 {/* Hazard Selection */}
                 <div className="hazard-selection">
                   <h3>Select DOT Hazard Classes Present in Container</h3>

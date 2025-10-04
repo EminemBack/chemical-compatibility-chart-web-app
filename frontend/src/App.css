@@ -2086,3 +2086,49 @@
     padding: 0.875rem;
   }
 }
+
+/* ✅ ADD THESE SDS BUTTON STYLES: */
+
+/* SDS Section */
+.sds-section {
+  animation: fadeIn 0.5s ease;
+}
+
+.sds-section a:hover {
+  transform: translateY(-2px) !important;
+}
+
+/* SDS Link in Header */
+.app-header nav a[href*="sds-search"] {
+  position: relative;
+  overflow: hidden;
+}
+
+.app-header nav a[href*="sds-search"]::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: #2196F3;
+  transition: left 0.3s ease;
+  z-index: -1;
+}
+
+.app-header nav a[href*="sds-search"]:hover::before {
+  left: 0;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .sds-section > div {
+    flex-direction: column;
+    align-items: flex-start !important;
+  }
+  
+  .sds-section a {
+    width: 100%;
+    justify-content: center;
+  }
+}
