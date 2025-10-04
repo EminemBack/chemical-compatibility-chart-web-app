@@ -58,6 +58,7 @@ redis_client = None
 SMTP_SERVER = os.getenv("SMTP_SERVER", "")
 SMTP_PORT = int(os.getenv("SMTP_PORT", ""))
 NOTIFICATION_FROM_EMAIL = os.getenv("NOTIFICATION_FROM_EMAIL", "")
+SAFETY_TEAM_EMAIL = os.getenv("SAFETY_TEAM_EMAIL", "")
 
 # JWT Configuration
 SECRET_KEY = os.getenv("SECRET_KEY", "")
@@ -436,6 +437,78 @@ async def send_approval_email(email: str, name: str, container_id: str, status: 
     except Exception as e:
         logger.error("Failed to send approval email", error=str(e))
 
+async def send_submission_notification(container_data: dict, submitter_name: str, submitter_email: str):
+    """Send notification to safety team when container is submitted"""
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = NOTIFICATION_FROM_EMAIL
+        msg['To'] = SAFETY_TEAM_EMAIL
+        msg['Subject'] = f"New Container Safety Assessment - {container_data['container']}"
+        
+        # Build hazards list
+        hazards_list = "\n".join([f"  - Class {h['hazard_class']}: {h['name']}" 
+                                   for h in container_data.get('hazards', [])])
+        
+        # Build pairs assessment
+        pairs_info = ""
+        if container_data.get('pairs'):
+            pairs_info = "\n\nHazard Pair Assessments:"
+            for pair in container_data['pairs']:
+                status_emoji = "✅" if pair['status'] == 'safe' else "⚠️" if pair['status'] == 'caution' else "❌"
+                min_dist = pair.get('min_required_distance')
+                min_dist_text = "Must Be Isolated" if min_dist is None else f"{min_dist}m"
+                
+                pairs_info += f"""
+  {status_emoji} {pair['hazard_a_name']} ↔ {pair['hazard_b_name']}
+     Actual Distance: {pair['distance']}m
+     Required Distance: {min_dist_text}
+     Status: {pair['status'].upper()}
+"""
+        
+        body = f"""
+New Container Safety Assessment Submitted
+
+CONTAINER DETAILS:
+─────────────────────────────────────────
+Container ID: {container_data['container']}
+Container Type: {container_data['container_type']}
+Department: {container_data['department']}
+Location: {container_data['location']}
+Submitted By: {submitter_name} ({submitter_email})
+Submitted At: {container_data.get('submitted_at', 'N/A')}
+
+HAZARDS PRESENT:
+─────────────────────────────────────────
+{hazards_list}
+{pairs_info}
+
+ACTION REQUIRED:
+─────────────────────────────────────────
+Please review this container safety assessment in the Chemical Safety System.
+Login to approve or reject this submission.
+
+System URL: [Your System URL Here]
+
+Best regards,
+Kinross Chemical Safety System (Automated Notification)
+        """
+        
+        msg.attach(MIMEText(body, 'plain'))
+        
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        server.sendmail(NOTIFICATION_FROM_EMAIL, SAFETY_TEAM_EMAIL, msg.as_string())
+        server.quit()
+        
+        logger.info("Safety team notification sent", 
+                   container_id=container_data['container'], 
+                   safety_email=SAFETY_TEAM_EMAIL)
+        
+    except Exception as e:
+        logger.error("Failed to send safety team notification", 
+                    error=str(e), 
+                    container_id=container_data.get('container'))
+        # Don't raise - we don't want email failures to block submissions
+    
 def create_access_token(data: dict, expires_delta: timedelta = None):
     """Create JWT access token"""
     to_encode = data.copy()
@@ -554,6 +627,55 @@ async def submit_container(submission: ContainerSubmission, authorization: str =
                             VALUES ($1, $2, $3, $4, $5, $6, $7)
                         """, container_id, pair_data.hazard_category_a_id, pair_data.hazard_category_b_id, 
                              pair_data.distance, is_isolated, min_dist_value, status)
+        
+                # SECTION - Fetch full container data for email
+                container_full_data = await conn.fetchrow("""
+                    SELECT id, department, location, submitted_by, container, container_type, submitted_at
+                    FROM containers WHERE id = $1
+                """, container_id)
+                
+                # Get hazards
+                hazard_rows = await conn.fetch("""
+                    SELECT h.name, h.hazard_class, h.subclass 
+                    FROM hazard_categories h
+                    JOIN container_hazards ch ON h.id = ch.hazard_category_id
+                    WHERE ch.container_id = $1
+                """, container_id)
+                
+                # Get pairs
+                pair_rows = await conn.fetch("""
+                    SELECT hp.*, ha.name as hazard_a_name, hb.name as hazard_b_name
+                    FROM hazard_pairs hp
+                    JOIN hazard_categories ha ON hp.hazard_category_a_id = ha.id
+                    JOIN hazard_categories hb ON hp.hazard_category_b_id = hb.id
+                    WHERE hp.container_id = $1
+                """, container_id)
+                
+            # Build email data structure
+            email_data = {
+                'container': container_full_data['container'],
+                'container_type': container_full_data['container_type'],
+                'department': container_full_data['department'],
+                'location': container_full_data['location'],
+                'submitted_at': container_full_data['submitted_at'].isoformat(),
+                'hazards': [{"name": row['name'], "hazard_class": row['hazard_class']} for row in hazard_rows],
+                'pairs': [
+                    {
+                        'hazard_a_name': row['hazard_a_name'],
+                        'hazard_b_name': row['hazard_b_name'],
+                        'distance': row['distance'],
+                        'min_required_distance': row['min_required_distance'],
+                        'status': row['status']
+                    } for row in pair_rows
+                ]
+            }
+        
+        # ✅ SEND EMAIL NOTIFICATION TO SAFETY TEAM
+        await send_submission_notification(
+            email_data, 
+            current_user['name'], 
+            current_user['email']
+        )
         
         logger.info("Container assessment submitted successfully", container_id=container_id)
         
