@@ -83,6 +83,17 @@ interface DeletionRequest {
   admin_review_date?: string;
 }
 
+interface AnalyticsData {
+  id: number;
+  department: string;
+  location: string;
+  submitted_by: string;
+  container_type: string;
+  submitted_at: string;
+  status: string;
+  hazards: Array<{name: string, hazard_class: string}>;
+}
+
 // const API_BASE = 'http://localhost:8000';
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
 
@@ -1004,6 +1015,149 @@ const AdminReviewModal: React.FC<{
   );
 };
 
+const DonutChart: React.FC<{
+  data: Array<{name: string, value: number}>;
+  title: string;
+  colors: string[];
+}> = ({ data, title, colors }) => {
+  if (data.length === 0) {
+    return (
+      <div style={{
+        textAlign: 'center',
+        padding: '2rem',
+        background: 'var(--kinross-light-gray)',
+        borderRadius: '10px'
+      }}>
+        <p style={{ color: 'var(--kinross-dark-gray)' }}>No data available</p>
+      </div>
+    );
+  }
+
+  const total = data.reduce((sum, item) => sum + item.value, 0);
+  let currentAngle = -90;
+
+  const createSlicePath = (startAngle: number, endAngle: number) => {
+    const startRad = (startAngle * Math.PI) / 180;
+    const endRad = (endAngle * Math.PI) / 180;
+    const outerRadius = 90;
+    const innerRadius = 50;
+
+    const x1 = 100 + outerRadius * Math.cos(startRad);
+    const y1 = 100 + outerRadius * Math.sin(startRad);
+    const x2 = 100 + outerRadius * Math.cos(endRad);
+    const y2 = 100 + outerRadius * Math.sin(endRad);
+    const x3 = 100 + innerRadius * Math.cos(endRad);
+    const y3 = 100 + innerRadius * Math.sin(endRad);
+    const x4 = 100 + innerRadius * Math.cos(startRad);
+    const y4 = 100 + innerRadius * Math.sin(startRad);
+
+    const largeArc = endAngle - startAngle > 180 ? 1 : 0;
+
+    return `M ${x1} ${y1} A ${outerRadius} ${outerRadius} 0 ${largeArc} 1 ${x2} ${y2} L ${x3} ${y3} A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${x4} ${y4} Z`;
+  };
+
+  return (
+    <div style={{
+      background: 'var(--kinross-white)',
+      borderRadius: '12px',
+      padding: '1.5rem',
+      boxShadow: '0 4px 15px rgba(30, 58, 95, 0.1)',
+      border: '1px solid var(--kinross-medium-gray)'
+    }}>
+      <h3 style={{
+        color: 'var(--kinross-navy)',
+        marginBottom: '1.5rem',
+        textAlign: 'center',
+        fontSize: '1.3rem'
+      }}>
+        {title}
+      </h3>
+
+      <div style={{ display: 'flex', gap: '2rem', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' }}>
+        <svg width="200" height="200" viewBox="0 0 200 200">
+          {data.map((item, idx) => {
+            const percentage = (item.value / total) * 100;
+            const angle = (percentage / 100) * 360;
+            const path = createSlicePath(currentAngle, currentAngle + angle);
+            const sliceAngle = currentAngle;
+            currentAngle += angle;
+
+            return (
+              <g key={idx}>
+                <path
+                  d={path}
+                  fill={colors[idx % colors.length]}
+                  stroke="white"
+                  strokeWidth="2"
+                  style={{ cursor: 'pointer', transition: 'opacity 0.3s' }}
+                  onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
+                  onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+                >
+                  <title>{`${item.name}: ${item.value} (${percentage.toFixed(1)}%)`}</title>
+                </path>
+              </g>
+            );
+          })}
+          <text
+            x="100"
+            y="100"
+            textAnchor="middle"
+            dominantBaseline="middle"
+            style={{
+              fontSize: '24px',
+              fontWeight: '700',
+              fill: 'var(--kinross-navy)'
+            }}
+          >
+            {total}
+          </text>
+          <text
+            x="100"
+            y="115"
+            textAnchor="middle"
+            dominantBaseline="middle"
+            style={{
+              fontSize: '12px',
+              fill: 'var(--kinross-dark-gray)'
+            }}
+          >
+            Total
+          </text>
+        </svg>
+
+        <div style={{ flex: 1, minWidth: '200px' }}>
+          {data.map((item, idx) => (
+            <div key={idx} style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.75rem',
+              marginBottom: '0.75rem',
+              padding: '0.5rem',
+              borderRadius: '6px',
+              background: 'var(--kinross-light-gray)'
+            }}>
+              <div style={{
+                width: '16px',
+                height: '16px',
+                borderRadius: '3px',
+                background: colors[idx % colors.length]
+              }} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '0.9rem', fontWeight: '600', color: 'var(--kinross-navy)' }}>
+                  {item.name}
+                </div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--kinross-dark-gray)' }}>
+                  {item.value} ({((item.value / total) * 100).toFixed(1)}%)
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 function App() {
   const [hazardCategories, setHazardCategories] = useState<HazardCategory[]>([]);
   const [selectedHazards, setSelectedHazards] = useState<HazardCategory[]>([]);
@@ -1015,7 +1169,7 @@ function App() {
   const [hazardPairs, setHazardPairs] = useState<HazardPairData[]>([]);
   const [containers, setContainers] = useState<ContainerData[]>([]);
   // UPDATE THIS EXISTING LINE (change 'containers' to 'approvals'):
-  const [activeTab, setActiveTab] = useState<'form' | 'containers' | 'approvals' | 'deletions' | 'admin-deletions'>('form');
+  const [activeTab, setActiveTab] = useState<'form' | 'containers' | 'approvals' | 'deletions' | 'admin-deletions' | 'analytics'>('form');
   const [loading, setLoading] = useState(false);
   const [pairStatuses, setPairStatuses] = useState<{[key: string]: any}>({});
   const [pendingContainers, setPendingContainers] = useState<ContainerData[]>([]);
@@ -1024,6 +1178,16 @@ function App() {
   const [showDeletionModal, setShowDeletionModal] = useState(false);
   const [selectedContainerForDeletion, setSelectedContainerForDeletion] = useState<number | null>(null);
   const [deletionReason, setDeletionReason] = useState('');
+
+  const [analyticsData, setAnalyticsData] = useState<AnalyticsData[]>([]);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsFilters, setAnalyticsFilters] = useState({
+    department: '',
+    submitter: '',
+    containerType: '',
+    startDate: '',
+    endDate: ''
+  });
 
   const [showAdminReviewModal, setShowAdminReviewModal] = useState(false);
   const [selectedRequestForReview, setSelectedRequestForReview] = useState<DeletionRequest | null>(null);
@@ -1664,6 +1828,75 @@ function App() {
     }
   };  
 
+  const fetchAnalyticsData = async () => {
+    setAnalyticsLoading(true);
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(`${API_BASE}/analytics/dashboard`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setAnalyticsData(data);
+      } else {
+        console.error('Failed to fetch analytics data');
+      }
+    } catch (error) {
+      console.error('Error fetching analytics data:', error);
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  };
+
+  const getFilteredAnalytics = () => {
+    return analyticsData.filter(item => {
+      const matchDept = !analyticsFilters.department || item.department === analyticsFilters.department;
+      const matchSubmitter = !analyticsFilters.submitter || item.submitted_by === analyticsFilters.submitter;
+      const matchType = !analyticsFilters.containerType || item.container_type === analyticsFilters.containerType;
+      
+      const itemDate = new Date(item.submitted_at);
+      const matchStartDate = !analyticsFilters.startDate || itemDate >= new Date(analyticsFilters.startDate);
+      const matchEndDate = !analyticsFilters.endDate || itemDate <= new Date(analyticsFilters.endDate);
+      
+      return matchDept && matchSubmitter && matchType && matchStartDate && matchEndDate;
+    });
+  };
+
+  const getDepartmentStats = () => {
+    const filtered = getFilteredAnalytics();
+    const stats: {[key: string]: number} = {};
+    filtered.forEach(item => {
+      stats[item.department] = (stats[item.department] || 0) + 1;
+    });
+    return Object.entries(stats).map(([name, value]) => ({ name, value }));
+  };
+
+  const getLocationStats = () => {
+    const filtered = getFilteredAnalytics();
+    const stats: {[key: string]: number} = {};
+    filtered.forEach(item => {
+      stats[item.location] = (stats[item.location] || 0) + 1;
+    });
+    return Object.entries(stats).map(([name, value]) => ({ name, value }));
+  };
+
+  const getSubstanceStats = () => {
+    const filtered = getFilteredAnalytics();
+    const stats: {[key: string]: number} = {};
+    filtered.forEach(item => {
+      item.hazards.forEach(hazard => {
+        const key = `Class ${hazard.hazard_class} - ${hazard.name}`;
+        stats[key] = (stats[key] || 0) + 1;
+      });
+    });
+    return Object.entries(stats).map(([name, value]) => ({ name, value }));
+  };
+
+  const getUniqueValues = (field: 'department' | 'submitted_by' | 'container_type') => {
+    return [...new Set(analyticsData.map(item => item[field]))].sort();
+  };
+
   const submitContainer = async () => {
     if (!department.trim() || !location.trim() || !container.trim() || !containerType.trim()) {
       alert('Please fill in all required fields (Department, Location, Container, Type)');
@@ -2063,7 +2296,20 @@ function App() {
                 >
                   <span>🗑️ Deletion Requests</span>
                 </button>
-              )}              
+              )}
+              
+              {/* NEW TAB FOR ANALYTICS - HOD ONLY: */}
+              {authState.user?.role === 'hod' && (
+                <button 
+                  className={activeTab === 'analytics' ? 'active' : ''}
+                  onClick={() => {
+                    setActiveTab('analytics');
+                    fetchAnalyticsData();
+                  }}
+                >
+                  <span>📊 Analytics</span>
+                </button>
+              )}
             </nav>
           </header>
 
@@ -3209,6 +3455,223 @@ function App() {
                     ))
                   )}
                 </div>
+              </div>
+            )}
+            {activeTab === 'analytics' && authState.user?.role === 'hod' && (
+              <div className="containers-view">
+                <h2>📊 Analytics Dashboard</h2>
+                <p style={{ 
+                  textAlign: 'center', 
+                  color: 'var(--kinross-dark-gray)', 
+                  marginBottom: '2rem',
+                  fontSize: '1.1rem'
+                }}>
+                  Container safety assessments statistics and insights
+                </p>
+
+                {/* Filters */}
+                <div style={{
+                  background: 'var(--kinross-light-gray)',
+                  borderRadius: '12px',
+                  padding: '2rem',
+                  marginBottom: '2rem',
+                  border: '1px solid var(--kinross-medium-gray)'
+                }}>
+                  <h3 style={{ color: 'var(--kinross-navy)', marginBottom: '1.5rem' }}>🔍 Filters</h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                    {/* First Row: Department, Submitted By, Container Type */}
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                      gap: '1rem'
+                    }}>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', fontSize: '0.9rem' }}>
+                          Department
+                          <select
+                            value={analyticsFilters.department}
+                            onChange={(e) => setAnalyticsFilters({...analyticsFilters, department: e.target.value})}
+                            style={{
+                              width: '100%',
+                              padding: '0.75rem',
+                              marginTop: '0.25rem',
+                              border: '2px solid var(--kinross-medium-gray)',
+                              borderRadius: '6px',
+                              fontSize: '0.95rem'
+                            }}
+                          >
+                            <option value="">All Departments</option>
+                            {getUniqueValues('department').map(dept => (
+                              <option key={dept} value={dept}>{dept}</option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', fontSize: '0.9rem' }}>
+                          Submitted By
+                          <select
+                            value={analyticsFilters.submitter}
+                            onChange={(e) => setAnalyticsFilters({...analyticsFilters, submitter: e.target.value})}
+                            style={{
+                              width: '100%',
+                              padding: '0.75rem',
+                              marginTop: '0.25rem',
+                              border: '2px solid var(--kinross-medium-gray)',
+                              borderRadius: '6px',
+                              fontSize: '0.95rem'
+                            }}
+                          >
+                            <option value="">All Submitters</option>
+                            {getUniqueValues('submitted_by').map(name => (
+                              <option key={name} value={name}>{name}</option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', fontSize: '0.9rem' }}>
+                          Container Type
+                          <select
+                            value={analyticsFilters.containerType}
+                            onChange={(e) => setAnalyticsFilters({...analyticsFilters, containerType: e.target.value})}
+                            style={{
+                              width: '100%',
+                              padding: '0.75rem',
+                              marginTop: '0.25rem',
+                              border: '2px solid var(--kinross-medium-gray)',
+                              borderRadius: '6px',
+                              fontSize: '0.95rem'
+                            }}
+                          >
+                            <option value="">All Types</option>
+                            {getUniqueValues('container_type').map(type => (
+                              <option key={type} value={type}>{type}</option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Second Row: Start Date, End Date, Reset Button */}
+                    <div style={{
+                      display: 'flex',
+                      gap: '1rem',
+                      flexWrap: 'wrap'
+                    }}>
+                      <div style={{ flex: '1', minWidth: '200px' }}>
+                        <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', fontSize: '0.9rem' }}>
+                          Start Date
+                          <input
+                            type="date"
+                            value={analyticsFilters.startDate}
+                            onChange={(e) => setAnalyticsFilters({...analyticsFilters, startDate: e.target.value})}
+                            style={{
+                              width: '100%',
+                              padding: '0.75rem',
+                              marginTop: '0.25rem',
+                              border: '2px solid var(--kinross-medium-gray)',
+                              borderRadius: '6px',
+                              fontSize: '0.95rem',
+                              boxSizing: 'border-box'
+                            }}
+                          />
+                        </label>
+                      </div>
+
+                      <div style={{ flex: '1', minWidth: '200px' }}>
+                        <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', fontSize: '0.9rem' }}>
+                          End Date
+                          <input
+                            type="date"
+                            value={analyticsFilters.endDate}
+                            onChange={(e) => setAnalyticsFilters({...analyticsFilters, endDate: e.target.value})}
+                            style={{
+                              width: '100%',
+                              padding: '0.75rem',
+                              marginTop: '0.25rem',
+                              border: '2px solid var(--kinross-medium-gray)',
+                              borderRadius: '6px',
+                              fontSize: '0.95rem',
+                              boxSizing: 'border-box'
+                            }}
+                          />
+                        </label>
+                      </div>
+
+                      <div style={{ flex: '1', minWidth: '200px', display: 'flex', flexDirection: 'column' }}>
+                        <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', fontSize: '0.9rem', visibility: 'hidden' }}>
+                          Actions
+                        </label>
+                        <button
+                          onClick={() => setAnalyticsFilters({
+                            department: '',
+                            submitter: '',
+                            containerType: '',
+                            startDate: '',
+                            endDate: ''
+                          })}
+                          style={{
+                            width: '100%',
+                            padding: '0.75rem',
+                            marginTop: '0.25rem',
+                            background: 'var(--kinross-gold)',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            fontWeight: '600',
+                            fontSize: '1rem',
+                            boxSizing: 'border-box',
+                            height: '46px'
+                          }}
+                        >
+                          🔄 Reset Filters
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Charts */}
+                {analyticsLoading ? (
+                  <div style={{ textAlign: 'center', padding: '3rem' }}>
+                    <div className="loading-spinner" style={{
+                      width: '50px',
+                      height: '50px',
+                      border: '5px solid var(--kinross-light-gray)',
+                      borderTop: '5px solid var(--kinross-gold)',
+                      borderRadius: '50%',
+                      animation: 'spin 1s linear infinite',
+                      margin: '0 auto 1rem'
+                    }}></div>
+                    <p style={{ color: 'var(--kinross-dark-gray)' }}>Loading analytics...</p>
+                  </div>
+                ) : (
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
+                    gap: '2rem'
+                  }}>
+                    <DonutChart
+                      data={getDepartmentStats()}
+                      title="📁 By Department"
+                      colors={['#D4A553', '#1E3A5F', '#4CAF50', '#2196F3', '#FF9800', '#9C27B0', '#F44336', '#009688', '#FF5722', '#795548']}
+                    />
+                    <DonutChart
+                      data={getLocationStats()}
+                      title="📍 By Location"
+                      colors={['#2196F3', '#4CAF50', '#FF9800', '#9C27B0', '#D4A553', '#1E3A5F', '#F44336', '#009688', '#FF5722', '#795548']}
+                    />
+                    <DonutChart
+                      data={getSubstanceStats()}
+                      title="⚗️ By Hazard Classes"
+                      colors={['#F44336', '#FF9800', '#FF5722', '#9C27B0', '#673AB7', '#3F51B5', '#2196F3', '#009688', '#4CAF50', '#8BC34A', '#CDDC39', '#FFC107']}
+                    />
+                  </div>
+                )}
               </div>
             )}
           </main>

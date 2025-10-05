@@ -1686,6 +1686,60 @@ async def hod_final_decision(
         logger.error("Error in HOD decision", error=str(e))
         raise HTTPException(status_code=500, detail=f"Error processing HOD decision: {str(e)}")
 
+# Analytics Endpoint
+@app.get("/analytics/dashboard")
+async def get_analytics_dashboard(authorization: str = Header(None)):
+    """Get analytics data for dashboard (HOD only)"""
+    try:
+        current_user = await get_current_user_from_token(authorization)
+        
+        if current_user['role'] != 'hod':
+            raise HTTPException(status_code=403, detail="HOD access required")
+        
+        # Get all containers with details
+        containers = await execute_query("""
+            SELECT 
+                c.id,
+                c.department,
+                c.location,
+                c.submitted_by,
+                c.container_type,
+                c.submitted_at,
+                c.status
+            FROM containers c
+            ORDER BY c.submitted_at DESC
+        """)
+        
+        # Get hazards for each container
+        analytics_data = []
+        for container in containers:
+            hazards = await execute_query("""
+                SELECT h.name, h.hazard_class
+                FROM hazard_categories h
+                JOIN container_hazards ch ON h.id = ch.hazard_category_id
+                WHERE ch.container_id = $1
+            """, container['id'])
+            
+            analytics_data.append({
+                "id": container['id'],
+                "department": container['department'],
+                "location": container['location'],
+                "submitted_by": container['submitted_by'],
+                "container_type": container['container_type'],
+                "submitted_at": container['submitted_at'].isoformat(),
+                "status": container['status'],
+                "hazards": [{"name": h['name'], "hazard_class": h['hazard_class']} for h in hazards]
+            })
+        
+        logger.info("Analytics data retrieved", count=len(analytics_data), user=current_user['name'])
+        return analytics_data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error fetching analytics data", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Error fetching analytics data: {str(e)}")
+
 # API Health Check
 @app.get("/health")
 async def health_check():
