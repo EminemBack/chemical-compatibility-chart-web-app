@@ -53,7 +53,7 @@ interface User {
   id: number;
   email: string;
   name: string;
-  role: 'admin' | 'user' | 'viewer';
+  role: 'hod' | 'admin' | 'user' | 'viewer';
   department: string;
 }
 
@@ -61,6 +61,26 @@ interface AuthState {
   user: User | null;
   token: string | null;
   loading: boolean;
+}
+
+interface DeletionRequest {
+  id: number;
+  container_id: number;
+  container: string;
+  department: string;
+  location: string;
+  container_type: string;
+  container_status: string;
+  submitted_by: string;
+  submitted_at: string;
+  requested_by: string;
+  requested_by_email: string;
+  request_reason: string;
+  request_date: string;
+  admin_reviewed: boolean;
+  admin_reviewer?: string;
+  admin_review_comment?: string;
+  admin_review_date?: string;
 }
 
 // const API_BASE = 'http://localhost:8000';
@@ -584,6 +604,406 @@ const ApprovalCommentModal: React.FC<{
   );
 };
 
+const DeletionRequestModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onSubmit: (reason: string) => void;
+  containerName: string;
+}> = ({ isOpen, onClose, onSubmit, containerName }) => {
+  const [reason, setReason] = React.useState('');
+  const [error, setError] = React.useState('');
+
+  if (!isOpen) return null;
+
+  const handleSubmit = () => {
+    const trimmedReason = reason.trim();
+    
+    if (trimmedReason.length === 0) {
+      setError('Deletion reason is required');
+      return;
+    }
+    
+    if (trimmedReason.length < 20) {
+      setError(`Reason must be at least 20 characters (current: ${trimmedReason.length})`);
+      return;
+    }
+    
+    onSubmit(trimmedReason);
+    setReason('');
+    setError('');
+  };
+
+  return (
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: 'rgba(30, 58, 95, 0.8)',
+      backdropFilter: 'blur(5px)',
+      zIndex: 1000,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '2rem'
+    }} onClick={onClose}>
+      <div style={{
+        background: 'white',
+        borderRadius: '12px',
+        padding: '2rem',
+        maxWidth: '600px',
+        width: '100%',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+      }} onClick={(e) => e.stopPropagation()}>
+        <h3 style={{ 
+          margin: '0 0 1rem 0', 
+          color: '#f44336',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.5rem'
+        }}>
+          🗑️ Request Container Deletion
+        </h3>
+        
+        <div style={{
+          background: '#fff3e0',
+          border: '2px solid #ff9800',
+          borderRadius: '8px',
+          padding: '1rem',
+          marginBottom: '1.5rem'
+        }}>
+          <p style={{ margin: 0, color: '#e65100', fontWeight: '600', fontSize: '0.95rem' }}>
+            <strong>Container:</strong> {containerName}
+          </p>
+          <p style={{ margin: '0.5rem 0 0 0', color: '#f57c00', fontSize: '0.85rem' }}>
+            This request will be sent to the Head of Department (HOD) for approval.
+          </p>
+        </div>
+        
+        <p style={{ margin: '0 0 1rem 0', color: '#666', fontSize: '0.95rem' }}>
+          Please provide a detailed reason for deletion (minimum 20 characters):
+        </p>
+        
+        <textarea
+          value={reason}
+          onChange={(e) => {
+            setReason(e.target.value);
+            setError('');
+          }}
+          placeholder="Example: Container assessment was submitted in error. The chemicals listed are not present at this location and the assessment needs to be removed from the system."
+          style={{
+            width: '100%',
+            minHeight: '120px',
+            padding: '1rem',
+            border: error ? '2px solid #f44336' : '2px solid #ccc',
+            borderRadius: '6px',
+            fontSize: '1rem',
+            fontFamily: 'inherit',
+            resize: 'vertical',
+            marginBottom: '0.5rem',
+            boxSizing: 'border-box'
+          }}
+          autoFocus
+        />
+        
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          marginBottom: '1rem'
+        }}>
+          <span style={{ 
+            fontSize: '0.85rem', 
+            color: reason.trim().length < 20 ? '#f44336' : '#4caf50' 
+          }}>
+            {reason.trim().length} / 20 characters minimum
+          </span>
+          {error && <span style={{ fontSize: '0.85rem', color: '#f44336' }}>{error}</span>}
+        </div>
+        
+        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+          <button
+            onClick={() => {
+              onClose();
+              setReason('');
+              setError('');
+            }}
+            style={{
+              padding: '0.75rem 1.5rem',
+              background: 'transparent',
+              color: '#666',
+              border: '2px solid #ccc',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontWeight: '600'
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={reason.trim().length < 20}
+            style={{
+              padding: '0.75rem 1.5rem',
+              background: '#f44336',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: reason.trim().length < 20 ? 'not-allowed' : 'pointer',
+              fontWeight: '600',
+              opacity: reason.trim().length < 20 ? 0.5 : 1
+            }}
+          >
+            Submit Deletion Request
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const AdminReviewModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onSubmit: (comment: string, recommendation: 'approve' | 'reject') => void;
+  request: DeletionRequest | null;
+}> = ({ isOpen, onClose, onSubmit, request }) => {
+  const [comment, setComment] = React.useState('');
+  const [recommendation, setRecommendation] = React.useState<'approve' | 'reject'>('approve');
+  const [error, setError] = React.useState('');
+
+  if (!isOpen || !request) return null;
+
+  const handleSubmit = () => {
+    const trimmedComment = comment.trim();
+    
+    if (trimmedComment.length === 0) {
+      setError('Admin review comment is required');
+      return;
+    }
+    
+    if (trimmedComment.length < 10) {
+      setError(`Comment must be at least 10 characters (current: ${trimmedComment.length})`);
+      return;
+    }
+    
+    onSubmit(trimmedComment, recommendation);
+    setComment('');
+    setRecommendation('approve');
+    setError('');
+  };
+
+  return (
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: 'rgba(30, 58, 95, 0.8)',
+      backdropFilter: 'blur(5px)',
+      zIndex: 1000,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '2rem'
+    }} onClick={onClose}>
+      <div style={{
+        background: 'white',
+        borderRadius: '12px',
+        padding: '2rem',
+        maxWidth: '700px',
+        width: '100%',
+        maxHeight: '90vh',
+        overflow: 'auto',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+      }} onClick={(e) => e.stopPropagation()}>
+        <h3 style={{ 
+          margin: '0 0 1rem 0', 
+          color: 'var(--kinross-navy)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.5rem'
+        }}>
+          📋 Admin Review - Deletion Request
+        </h3>
+
+        {/* Request Details */}
+        <div style={{
+          background: 'var(--kinross-light-gray)',
+          border: '2px solid var(--kinross-medium-gray)',
+          borderRadius: '8px',
+          padding: '1rem',
+          marginBottom: '1.5rem'
+        }}>
+          <p style={{ margin: '0 0 0.5rem 0', fontWeight: '600', color: 'var(--kinross-navy)' }}>
+            <strong>Container:</strong> {request.container}
+          </p>
+          <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.9rem' }}>
+            <strong>Requested by:</strong> {request.requested_by}
+          </p>
+          <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.9rem' }}>
+            <strong>Department:</strong> {request.department}
+          </p>
+          <p style={{ margin: '0', fontSize: '0.85rem', fontStyle: 'italic' }}>
+            <strong>User's Reason:</strong><br />
+            {request.request_reason}
+          </p>
+        </div>
+        
+        {/* Admin Recommendation */}
+        <div style={{ marginBottom: '1.5rem' }}>
+          <label style={{ 
+            display: 'block', 
+            marginBottom: '0.75rem', 
+            fontWeight: '600',
+            color: 'var(--kinross-navy)'
+          }}>
+            Your Recommendation to HOD:
+          </label>
+          <div style={{ display: 'flex', gap: '1rem' }}>
+            <label style={{
+              flex: 1,
+              padding: '1rem',
+              border: recommendation === 'approve' ? '3px solid #4caf50' : '2px solid #ccc',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              background: recommendation === 'approve' ? '#e8f5e9' : 'white',
+              transition: 'all 0.3s ease'
+            }}>
+              <input
+                type="radio"
+                name="recommendation"
+                value="approve"
+                checked={recommendation === 'approve'}
+                onChange={(e) => setRecommendation('approve')}
+                style={{ marginRight: '0.5rem' }}
+              />
+              <strong style={{ color: '#4caf50' }}>✅ Recommend Approval</strong>
+            </label>
+            <label style={{
+              flex: 1,
+              padding: '1rem',
+              border: recommendation === 'reject' ? '3px solid #f44336' : '2px solid #ccc',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              background: recommendation === 'reject' ? '#ffebee' : 'white',
+              transition: 'all 0.3s ease'
+            }}>
+              <input
+                type="radio"
+                name="recommendation"
+                value="reject"
+                checked={recommendation === 'reject'}
+                onChange={(e) => setRecommendation('reject')}
+                style={{ marginRight: '0.5rem'}}              
+              />
+              <strong style={{ color: '#f44336' }}>❌ Recommend Rejection</strong>
+            </label>
+          </div>
+        </div>
+        
+        <p style={{ margin: '0 0 1rem 0', color: '#666', fontSize: '0.95rem' }}>
+          Provide your detailed review and recommendation (minimum 10 characters):
+        </p>
+        
+        <textarea
+          value={comment}
+          onChange={(e) => {
+            setComment(e.target.value);
+            setError('');
+          }}
+          placeholder={
+            recommendation === 'approve' 
+              ? 'Example: I have reviewed the deletion request. The user\'s reason is valid - the container was submitted in error. I recommend approval for deletion.'
+              : 'Example: I have reviewed the deletion request. The container contains active chemicals in storage. I recommend rejection of this deletion request.'
+          }
+          style={{
+            width: '100%',
+            minHeight: '120px',
+            padding: '1rem',
+            border: error ? '2px solid #f44336' : '2px solid #ccc',
+            borderRadius: '6px',
+            fontSize: '1rem',
+            fontFamily: 'inherit',
+            resize: 'vertical',
+            marginBottom: '0.5rem',
+            boxSizing: 'border-box'
+          }}
+          autoFocus
+        />
+        
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          marginBottom: '1rem'
+        }}>
+          <span style={{ 
+            fontSize: '0.85rem', 
+            color: comment.trim().length < 10 ? '#f44336' : '#4caf50' 
+          }}>
+            {comment.trim().length} / 10 characters minimum
+          </span>
+          {error && <span style={{ fontSize: '0.85rem', color: '#f44336' }}>{error}</span>}
+        </div>
+
+        <div style={{
+          background: '#fff3e0',
+          border: '2px solid #ff9800',
+          borderRadius: '8px',
+          padding: '1rem',
+          marginBottom: '1.5rem'
+        }}>
+          <p style={{ margin: 0, fontSize: '0.85rem', color: '#e65100' }}>
+            ⚠️ <strong>Note:</strong> Your review will be forwarded to the HOD for final decision. 
+            The HOD will see your recommendation and comments.
+          </p>
+        </div>
+        
+        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+          <button
+            onClick={() => {
+              onClose();
+              setComment('');
+              setRecommendation('approve');
+              setError('');
+            }}
+            style={{
+              padding: '0.75rem 1.5rem',
+              background: 'transparent',
+              color: '#666',
+              border: '2px solid #ccc',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontWeight: '600'
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={comment.trim().length < 10}
+            style={{
+              padding: '0.75rem 1.5rem',
+              background: recommendation === 'approve' ? '#4caf50' : '#f44336',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: comment.trim().length < 10 ? 'not-allowed' : 'pointer',
+              fontWeight: '600',
+              opacity: comment.trim().length < 10 ? 0.5 : 1
+            }}
+          >
+            Submit Review to HOD
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 function App() {
   const [hazardCategories, setHazardCategories] = useState<HazardCategory[]>([]);
   const [selectedHazards, setSelectedHazards] = useState<HazardCategory[]>([]);
@@ -595,10 +1015,18 @@ function App() {
   const [hazardPairs, setHazardPairs] = useState<HazardPairData[]>([]);
   const [containers, setContainers] = useState<ContainerData[]>([]);
   // UPDATE THIS EXISTING LINE (change 'containers' to 'approvals'):
-  const [activeTab, setActiveTab] = useState<'form' | 'containers' | 'approvals'>('form');
+  const [activeTab, setActiveTab] = useState<'form' | 'containers' | 'approvals' | 'deletions' | 'admin-deletions'>('form');
   const [loading, setLoading] = useState(false);
   const [pairStatuses, setPairStatuses] = useState<{[key: string]: any}>({});
   const [pendingContainers, setPendingContainers] = useState<ContainerData[]>([]);
+
+  const [deletionRequests, setDeletionRequests] = useState<DeletionRequest[]>([]);
+  const [showDeletionModal, setShowDeletionModal] = useState(false);
+  const [selectedContainerForDeletion, setSelectedContainerForDeletion] = useState<number | null>(null);
+  const [deletionReason, setDeletionReason] = useState('');
+
+  const [showAdminReviewModal, setShowAdminReviewModal] = useState(false);
+  const [selectedRequestForReview, setSelectedRequestForReview] = useState<DeletionRequest | null>(null);
 
   // AUTH STATES:
   const [authState, setAuthState] = useState<AuthState>({
@@ -1043,6 +1471,24 @@ function App() {
     }
   };
 
+  const fetchDeletionRequests = async () => {
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(`${API_BASE}/deletion-requests/pending`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setDeletionRequests(data);
+      } else {
+        console.error('Failed to fetch deletion requests');
+      }
+    } catch (error) {
+      console.error('Error fetching deletion requests:', error);
+    }
+  };  
+
   const approveContainer = async (containerId: number, status: string, comment: string) => {
     // FRONTEND VALIDATION (belt and suspenders)
     if (!comment || comment.trim().length === 0) {
@@ -1107,6 +1553,116 @@ function App() {
       alert('Error deleting container');
     }
   };
+
+  const requestContainerDeletion = async (containerId: number, reason: string) => {
+    if (!reason || reason.trim().length < 20) {
+      alert('❌ Deletion reason must be at least 20 characters long');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(`${API_BASE}/containers/${containerId}/request-deletion`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ container_id: containerId, reason: reason.trim() })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        alert(`✅ ${data.message}`);
+        setShowDeletionModal(false);
+        setDeletionReason('');
+        setSelectedContainerForDeletion(null);
+        fetchContainers();
+        if (authState.user?.role === 'hod') {
+          fetchDeletionRequests();
+        }
+      } else {
+        const error = await response.json();
+        alert(`❌ Error: ${error.detail}`);
+      }
+    } catch (error) {
+      console.error('Error requesting deletion:', error);
+      alert('❌ Error requesting deletion. Please try again.');
+    }
+  };  
+
+  const adminReviewDeletion = async (requestId: number, comment: string, recommendation: 'approve' | 'reject') => {
+    if (!comment || comment.trim().length < 10) {
+      alert('❌ Admin review comment must be at least 10 characters long');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(`${API_BASE}/deletion-requests/${requestId}/admin-review`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ 
+          deletion_request_id: requestId, 
+          comment: comment.trim(),
+          recommendation 
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        alert(`✅ ${data.message}`);
+        setShowAdminReviewModal(false);
+        setSelectedRequestForReview(null);
+        fetchDeletionRequests();
+      } else {
+        const error = await response.json();
+        alert(`❌ Error: ${error.detail}`);
+      }
+    } catch (error) {
+      console.error('Error submitting admin review:', error);
+      alert('❌ Error submitting review. Please try again.');
+    }
+  };
+
+  const hodFinalDecision = async (requestId: number, decision: 'approved' | 'rejected', comment: string) => {
+    if (!comment || comment.trim().length < 10) {
+      alert('❌ HOD decision comment must be at least 10 characters long');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(`${API_BASE}/deletion-requests/${requestId}/hod-decision`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ 
+          deletion_request_id: requestId, 
+          decision, 
+          comment: comment.trim() 
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        alert(`✅ ${data.message}`);
+        fetchDeletionRequests();
+        fetchContainers();
+      } else {
+        const error = await response.json();
+        alert(`❌ Error: ${error.detail}`);
+      }
+    } catch (error) {
+      console.error('Error in HOD decision:', error);
+      alert('❌ Error processing decision. Please try again.');
+    }
+  };  
 
   const submitContainer = async () => {
     if (!department.trim() || !location.trim() || !container.trim() || !containerType.trim()) {
@@ -1444,7 +2000,7 @@ function App() {
             )}
 
             <nav>
-              {authState.user && (authState.user.role === 'admin' || authState.user.role === 'user') && (
+              {authState.user && (authState.user.role === 'hod' || authState.user.role === 'admin' || authState.user.role === 'user') && (
                 <button 
                   className={activeTab === 'form' ? 'active' : ''}
                   onClick={() => setActiveTab('form')}
@@ -1469,12 +2025,12 @@ function App() {
               )}
 
               {/* UPDATE approvals button: */}
-              {authState.user?.role === 'admin' && (
+              {authState.user && (authState.user.role === 'hod' || authState.user.role === 'admin') && (
                 <button 
                   className={activeTab === 'approvals' ? 'active' : ''}
                   onClick={() => {
                     setActiveTab('approvals');
-                    if (authState.user?.role === 'admin') {
+                    if (authState.user && (authState.user.role === 'hod' || authState.user.role === 'admin')) {
                       fetchPendingContainers(); // Add this line
                     }
                   }}
@@ -1482,6 +2038,32 @@ function App() {
                   <span>Pending Approvals</span>
                 </button>
               )}
+
+              {/* ✅ ADD THIS NEW TAB FOR ADMIN: */}
+              {authState.user?.role === 'admin' && (
+                <button 
+                  className={activeTab === 'admin-deletions' ? 'active' : ''}
+                  onClick={() => {
+                    setActiveTab('admin-deletions');
+                    fetchDeletionRequests();
+                  }}
+                >
+                  <span>🔍 Review Deletions</span>
+                </button>
+              )}
+
+              {/* NEW TAB FOR HOD: */}
+              {authState.user?.role === 'hod' && (
+                <button 
+                  className={activeTab === 'deletions' ? 'active' : ''}
+                  onClick={() => {
+                    setActiveTab('deletions');
+                    fetchDeletionRequests();
+                  }}
+                >
+                  <span>🗑️ Deletion Requests</span>
+                </button>
+              )}              
             </nav>
           </header>
 
@@ -2066,7 +2648,7 @@ function App() {
                             <span><strong>Container:</strong> {container.container}</span>
                             <span><strong>Type:</strong> {container.container_type}</span>
                             <span><strong>Submitted by:</strong> {container.submitted_by}</span>
-                            <span><strong>Date:</strong> {new Date(container.submitted_at).toLocaleDateString()}</span>
+                            <span><strong>Date:</strong> {new Date(container.submitted_at).toLocaleDateString()} - {new Date(container.submitted_at).toLocaleTimeString()}</span>
                             {container.approved_by && (
                               <span><strong>Approved by:</strong> {container.approved_by}</span>
                             )}
@@ -2139,10 +2721,13 @@ function App() {
                         </div>
 
                         {/* ADD THE DELETE BUTTON HERE (inside the container-card but after container-pairs): */}
-                        {authState.user?.role === 'admin' && (
+                        {authState.user && authState.user.role === 'user' && container.submitted_by === authState.user.name && (
                           <div style={{ marginTop: '1rem', textAlign: 'right', padding: '0 2rem 2rem 2rem' }}>
                             <button
-                              onClick={() => deleteContainer(container.id, container.container)}
+                              onClick={() => {
+                                setSelectedContainerForDeletion(container.id);
+                                setShowDeletionModal(true);
+                              }}
                               style={{
                                 padding: '0.5rem 1rem',
                                 background: '#f44336',
@@ -2150,10 +2735,11 @@ function App() {
                                 border: 'none',
                                 borderRadius: '4px',
                                 fontSize: '0.9rem',
-                                cursor: 'pointer'
+                                cursor: 'pointer',
+                                fontWeight: '600'
                               }}
                             >
-                              🗑️ Delete Container
+                              🗑️ Request Deletion
                             </button>
                           </div>
                         )}
@@ -2163,7 +2749,7 @@ function App() {
                 </div>
               </div>
             )}
-            {activeTab === 'approvals' && authState.user?.role === 'admin' && (
+            {activeTab === 'approvals' && authState.user && (authState.user.role === 'hod' || authState.user.role === 'admin') && (
               <div className="containers-view">
                 <h2>Pending Container Approvals</h2>
                 <div className="containers-list">
@@ -2246,7 +2832,7 @@ function App() {
                         )}
 
                         <div style={{ marginTop: '1.5rem', padding: '1rem', background: '#f9f9f9', borderRadius: '8px' }}>
-                          <h4>Admin Actions:</h4>
+                          <h4>{authState.user?.role === 'hod' ? 'HOD Actions:' : 'Admin Actions:'}</h4>
                           <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', flexWrap: 'wrap' }}>
                             <button
                               onClick={() => setApprovalModal({ 
@@ -2306,24 +2892,388 @@ function App() {
                 </div>
               </div>
             )}
+
+            {/* ✅ ADD THIS NEW ADMIN REVIEW TAB: */}
+            {activeTab === 'admin-deletions' && authState.user?.role === 'admin' && (
+              <div className="containers-view">
+                <h2>🔍 Deletion Requests - Admin Review</h2>
+                <p style={{ 
+                  textAlign: 'center', 
+                  color: 'var(--kinross-dark-gray)', 
+                  marginBottom: '2rem',
+                  fontSize: '1.1rem'
+                }}>
+                  Review user deletion requests and provide recommendations to HOD
+                </p>
+
+                <div className="containers-list">
+                  {deletionRequests.length === 0 ? (
+                    <div className="no-containers">
+                      <p>No pending deletion requests for admin review.</p>
+                    </div>
+                  ) : (
+                    deletionRequests.map(request => (
+                      <div key={request.id} className="container-card" style={{
+                        borderLeft: '5px solid #2196F3'
+                      }}>
+                        <div className="container-header">
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <h3>🔍 Deletion Request - Container #{request.container}</h3>
+                            <span style={{
+                              padding: '0.5rem 1rem',
+                              background: '#e3f2fd',
+                              color: '#1565C0',
+                              borderRadius: '20px',
+                              fontSize: '0.85rem',
+                              fontWeight: '700'
+                            }}>
+                              AWAITING ADMIN REVIEW
+                            </span>
+                          </div>
+                          
+                          <div className="container-meta" style={{ marginTop: '1rem' }}>
+                            <span><strong>Container ID:</strong> {request.container}</span>
+                            <span><strong>Department:</strong> {request.department}</span>
+                            <span><strong>Location:</strong> {request.location}</span>
+                            <span><strong>Type:</strong> {request.container_type}</span>
+                            <span><strong>Current Status:</strong> {request.container_status}</span>
+                            <span><strong>Originally Submitted By:</strong> {request.submitted_by}</span>
+                          </div>
+                        </div>
+
+                        <div style={{
+                          marginTop: '1.5rem',
+                          padding: '1.5rem',
+                          background: '#e3f2fd',
+                          borderRadius: '8px',
+                          border: '2px solid #2196F3'
+                        }}>
+                          <h4 style={{ 
+                            margin: '0 0 1rem 0', 
+                            color: '#1565C0',
+                            fontSize: '1.1rem'
+                          }}>
+                            User's Deletion Request
+                          </h4>
+                          <div style={{ marginBottom: '1rem' }}>
+                            <strong style={{ color: '#1976D2' }}>Requested By:</strong> {request.requested_by} ({request.requested_by_email})
+                          </div>
+                          <div style={{ marginBottom: '1rem' }}>
+                            <strong style={{ color: '#1976D2' }}>Request Date:</strong> {new Date(request.request_date).toLocaleString()}
+                          </div>
+                          <div>
+                            <strong style={{ color: '#1976D2' }}>User's Reason:</strong>
+                            <p style={{ 
+                              margin: '0.5rem 0 0 0', 
+                              padding: '1rem',
+                              background: 'white',
+                              borderRadius: '6px',
+                              border: '1px solid #90caf9',
+                              color: '#333',
+                              lineHeight: '1.6'
+                            }}>
+                              {request.request_reason}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div style={{ 
+                          marginTop: '1.5rem', 
+                          padding: '1.5rem', 
+                          background: '#f9f9f9', 
+                          borderRadius: '8px' 
+                        }}>
+                          <h4 style={{ margin: '0 0 1rem 0', color: 'var(--kinross-navy)' }}>
+                            Admin Review Required
+                          </h4>
+                          <p style={{ 
+                            margin: '0 0 1rem 0', 
+                            color: '#666', 
+                            fontSize: '0.95rem' 
+                          }}>
+                            Review the deletion request and provide your recommendation to the HOD.
+                          </p>
+                          <button
+                            onClick={() => {
+                              setSelectedRequestForReview(request);
+                              setShowAdminReviewModal(true);
+                            }}
+                            style={{
+                              padding: '0.875rem 2rem',
+                              background: 'linear-gradient(135deg, #2196F3, #1976D2)',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '6px',
+                              cursor: 'pointer',
+                              fontWeight: '700',
+                              fontSize: '1rem',
+                              boxShadow: '0 4px 15px rgba(33, 150, 243, 0.3)'
+                            }}
+                          >
+                            📋 Review & Forward to HOD
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* NEW TAB: for HOD Pending Deletions Requests */}
+            {activeTab === 'deletions' && authState.user?.role === 'hod' && (
+              <div className="containers-view">
+                <h2>🗑️ Pending Deletion Requests - HOD Final Decision</h2>
+                <p style={{ 
+                  textAlign: 'center', 
+                  color: 'var(--kinross-dark-gray)', 
+                  marginBottom: '2rem',
+                  fontSize: '1.1rem'
+                }}>
+                  Make final decision on admin-reviewed deletion requests
+                </p>
+
+                <div className="containers-list">
+                  {deletionRequests.length === 0 ? (
+                    <div className="no-containers">
+                      <p>No deletion requests awaiting HOD decision.</p>
+                    </div>
+                  ) : (
+                    deletionRequests.map(request => (
+                      <div key={request.id} className="container-card" style={{
+                        borderLeft: '5px solid #f44336'
+                      }}>
+                        {/* Container Header - same as before */}
+                        <div className="container-header">
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <h3>🗑️ Deletion Request - Container #{request.container}</h3>
+                            <span style={{
+                              padding: '0.5rem 1rem',
+                              background: '#fff3e0',
+                              color: '#e65100',
+                              borderRadius: '20px',
+                              fontSize: '0.85rem',
+                              fontWeight: '700'
+                            }}>
+                              AWAITING HOD DECISION
+                            </span>
+                          </div>
+                          
+                          <div className="container-meta" style={{ marginTop: '1rem' }}>
+                            <span><strong>Container ID:</strong> {request.container}</span>
+                            <span><strong>Department:</strong> {request.department}</span>
+                            <span><strong>Location:</strong> {request.location}</span>
+                            <span><strong>Type:</strong> {request.container_type}</span>
+                            <span><strong>Current Status:</strong> {request.container_status}</span>
+                            <span><strong>Originally Submitted By:</strong> {request.submitted_by}</span>
+                          </div>
+                        </div>
+
+                        {/* User's Request */}
+                        <div style={{
+                          marginTop: '1.5rem',
+                          padding: '1.5rem',
+                          background: '#ffebee',
+                          borderRadius: '8px',
+                          border: '2px solid #f44336'
+                        }}>
+                          <h4 style={{ 
+                            margin: '0 0 1rem 0', 
+                            color: '#c62828',
+                            fontSize: '1.1rem'
+                          }}>
+                            User's Deletion Request
+                          </h4>
+                          <div style={{ marginBottom: '1rem' }}>
+                            <strong style={{ color: '#d32f2f' }}>Requested By:</strong> {request.requested_by} ({request.requested_by_email})
+                          </div>
+                          <div style={{ marginBottom: '1rem' }}>
+                            <strong style={{ color: '#d32f2f' }}>Request Date:</strong> {new Date(request.request_date).toLocaleString()}
+                          </div>
+                          <div>
+                            <strong style={{ color: '#d32f2f' }}>User's Reason:</strong>
+                            <p style={{ 
+                              margin: '0.5rem 0 0 0', 
+                              padding: '1rem',
+                              background: 'white',
+                              borderRadius: '6px',
+                              border: '1px solid #ef9a9a',
+                              color: '#333',
+                              lineHeight: '1.6'
+                            }}>
+                              {request.request_reason}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* ✅ ADD ADMIN REVIEW INFO: */}
+                        {request.admin_reviewed && (
+                          <div style={{
+                            marginTop: '1.5rem',
+                            padding: '1.5rem',
+                            background: '#e3f2fd',
+                            borderRadius: '8px',
+                            border: '2px solid #2196F3'
+                          }}>
+                            <h4 style={{ 
+                              margin: '0 0 1rem 0', 
+                              color: '#1565C0',
+                              fontSize: '1.1rem',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.5rem'
+                            }}>
+                              📋 Admin Review Completed
+                            </h4>
+                            <div style={{ marginBottom: '1rem' }}>
+                              <strong style={{ color: '#1976D2' }}>Reviewed By:</strong> {request.admin_reviewer}
+                            </div>
+                            <div style={{ marginBottom: '1rem' }}>
+                              <strong style={{ color: '#1976D2' }}>Review Date:</strong> {request.admin_review_date ? new Date(request.admin_review_date).toLocaleString() : 'N/A'}
+                            </div>
+                            <div>
+                              <strong style={{ color: '#1976D2' }}>Admin's Comments & Recommendation:</strong>
+                              <p style={{ 
+                                margin: '0.5rem 0 0 0', 
+                                padding: '1rem',
+                                background: 'white',
+                                borderRadius: '6px',
+                                border: '1px solid #90caf9',
+                                color: '#333',
+                                lineHeight: '1.6',
+                                fontWeight: '600'
+                              }}>
+                                {request.admin_review_comment}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* HOD Action Buttons */}
+                        <div style={{ 
+                          marginTop: '1.5rem', 
+                          padding: '1.5rem', 
+                          background: '#f9f9f9', 
+                          borderRadius: '8px' 
+                        }}>
+                          <h4 style={{ margin: '0 0 1rem 0', color: 'var(--kinross-navy)' }}>
+                            HOD Final Decision - Action Required
+                          </h4>
+                          <div style={{ 
+                            display: 'flex', 
+                            gap: '1rem', 
+                            marginTop: '1rem', 
+                            flexWrap: 'wrap' 
+                          }}>
+                            <button
+                              onClick={() => setApprovalModal({ 
+                                isOpen: true, 
+                                type: 'approve', 
+                                containerId: request.id
+                              })}
+                              style={{
+                                padding: '0.75rem 1.5rem',
+                                background: '#4caf50',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                fontWeight: '600',
+                                fontSize: '1rem'
+                              }}
+                            >
+                              ✅ Approve Deletion
+                            </button>
+                            <button
+                              onClick={() => setApprovalModal({ 
+                                isOpen: true, 
+                                type: 'reject', 
+                                containerId: request.id
+                              })}
+                              style={{
+                                padding: '0.75rem 1.5rem',
+                                background: '#ff9800',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                fontWeight: '600',
+                                fontSize: '1rem'
+                              }}
+                            >
+                              ❌ Reject Deletion
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
           </main>
 
           <footer className="kinross-footer">
             <p>© 2025 Kinross Gold Corporation - Chemical Container Safety Management System</p>
           </footer>
 
+          {/* Approval Comment MODAL: */}
           <ApprovalCommentModal
             isOpen={approvalModal.isOpen}
             onClose={() => setApprovalModal({ ...approvalModal, isOpen: false })}
             onSubmit={(comment) => {
-              approveContainer(
-                approvalModal.containerId, 
-                approvalModal.type === 'approve' ? 'approved' : 'rejected', 
-                comment
-              );
+              // Check if we're in deletion tab (HOD final decision)
+              if (activeTab === 'deletions') {
+                hodFinalDecision(
+                  approvalModal.containerId,
+                  approvalModal.type === 'approve' ? 'approved' : 'rejected',
+                  comment
+                );
+              } else {
+                // Container approval
+                approveContainer(
+                  approvalModal.containerId, 
+                  approvalModal.type === 'approve' ? 'approved' : 'rejected', 
+                  comment
+                );
+              }
             }}
             type={approvalModal.type}
           />
+
+          <AdminReviewModal
+            isOpen={showAdminReviewModal}
+            onClose={() => {
+              setShowAdminReviewModal(false);
+              setSelectedRequestForReview(null);
+            }}
+            onSubmit={(comment, recommendation) => {
+              if (selectedRequestForReview) {
+                adminReviewDeletion(selectedRequestForReview.id, comment, recommendation);
+              }
+            }}
+            request={selectedRequestForReview}
+          />
+
+          {/* DELETION REQUEST MODAL: */}
+          <DeletionRequestModal
+            isOpen={showDeletionModal}
+            onClose={() => {
+              setShowDeletionModal(false);
+              setSelectedContainerForDeletion(null);
+              setDeletionReason('');
+            }}
+            onSubmit={(reason) => {
+              if (selectedContainerForDeletion) {
+                requestContainerDeletion(selectedContainerForDeletion, reason);
+              }
+            }}
+            containerName={
+              selectedContainerForDeletion 
+                ? containers.find(c => c.id === selectedContainerForDeletion)?.container || ''
+                : ''
+            }
+          />          
         </>
       )}
     </div>

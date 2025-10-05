@@ -59,6 +59,7 @@ SMTP_SERVER = os.getenv("SMTP_SERVER", "")
 SMTP_PORT = int(os.getenv("SMTP_PORT", ""))
 NOTIFICATION_FROM_EMAIL = os.getenv("NOTIFICATION_FROM_EMAIL", "")
 SAFETY_TEAM_EMAIL = os.getenv("SAFETY_TEAM_EMAIL", "")
+HOD_EMAILS = os.getenv("HOD_EMAILS", "").split(",")  # List of HOD emails for deletion requests
 
 # JWT Configuration
 SECRET_KEY = os.getenv("SECRET_KEY", "")
@@ -125,7 +126,7 @@ class User(BaseModel):
     id: int
     email: str
     name: str
-    role: str  # 'admin', 'user', 'viewer'
+    role: str  # 'hod', 'admin', 'user', 'viewer'
     department: str
     active: bool
 
@@ -147,6 +148,26 @@ class ApprovalRequest(BaseModel):
     container_id: int
     status: str  # 'approved' or 'rejected'
     comment: Optional[str] = None
+
+# New models for deletion requests and reviews
+class DeletionRequest(BaseModel):
+    container_id: int
+    reason: str
+
+class DeletionReview(BaseModel):
+    deletion_request_id: int
+    status: str  # 'approved' or 'rejected'
+    comment: str
+
+class AdminReviewRequest(BaseModel):
+    deletion_request_id: int
+    comment: str
+    recommendation: str  # 'approve' or 'reject'
+
+class HODDecisionRequest(BaseModel):
+    deletion_request_id: int
+    decision: str  # 'approved' or 'rejected'
+    comment: str
 
 # Database functions
 async def get_db_pool():
@@ -508,7 +529,178 @@ Kinross Chemical Safety System (Automated Notification)
                     error=str(e), 
                     container_id=container_data.get('container'))
         # Don't raise - we don't want email failures to block submissions
-    
+
+async def send_deletion_request_to_admin(container_data: dict, requester_name: str, requester_email: str, reason: str):
+    """Send notification to ADMIN when user requests deletion"""
+    try:
+        # # Get all Admin emails, will try to send to all Admins later
+        # admin_users = await execute_query(
+        #     "SELECT email, name FROM users WHERE role = 'admin' AND active = true"
+        # )
+        
+        # if not admin_users:
+        #     logger.warning("No Admin users found to notify for deletion request")
+        #     return
+        
+        # admin_emails = [user['email'] for user in admin_users]
+        
+        msg = MIMEMultipart()
+        msg['From'] = NOTIFICATION_FROM_EMAIL
+        msg['To'] = SAFETY_TEAM_EMAIL
+        msg['Subject'] = f"Container Deletion Request - Admin Review Required - {container_data['container']}"
+        
+        body = f"""
+Container Deletion Request - ADMIN REVIEW REQUIRED
+
+DELETION REQUEST DETAILS:
+─────────────────────────────────────────
+Container ID: {container_data['container']}
+Department: {container_data['department']}
+Location: {container_data['location']}
+Container Type: {container_data['container_type']}
+
+Requested By: {requester_name} ({requester_email})
+Reason for Deletion:
+{reason}
+
+CONTAINER INFORMATION:
+─────────────────────────────────────────
+Current Status: {container_data.get('status', 'N/A')}
+Submitted By: {container_data.get('submitted_by', 'N/A')}
+Submitted At: {container_data.get('submitted_at', 'N/A')}
+
+ACTION REQUIRED:
+─────────────────────────────────────────
+As Administrator, please review this deletion request and provide your
+recommendation. After your review, it will be forwarded to the HOD for
+final approval.
+
+Login to the Chemical Safety System to review this request.
+
+System URL: [Your System URL Here]
+
+Best regards,
+Kinross Chemical Safety System (Automated Notification)
+        """
+        
+        msg.attach(MIMEText(body, 'plain'))
+        
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        server.sendmail(NOTIFICATION_FROM_EMAIL, SAFETY_TEAM_EMAIL, msg.as_string())
+        server.quit()
+        
+        logger.info("Admin deletion request notification sent", 
+                   container_id=container_data['container']) 
+                #    admin_count=len(admin_emails))
+        
+    except Exception as e:
+        logger.error("Failed to send admin deletion notification", error=str(e))
+
+async def send_deletion_decision_notification(container_id: str, requester_email: str, requester_name: str, status: str, comment: str, hod_name: str):
+    """Send notification to requester about deletion decision"""
+    try:
+        status_text = "APPROVED" if status == "approved" else "REJECTED"
+        
+        msg = MIMEMultipart()
+        msg['From'] = NOTIFICATION_FROM_EMAIL
+        msg['To'] = requester_email
+        msg['Subject'] = f"Deletion Request {status_text} - {container_id}"
+        
+        body = f"""
+Hello {requester_name},
+
+Your deletion request for container {container_id} has been {status_text}.
+
+Decision: {status_text}
+Reviewed By: {hod_name} (Head of Department)
+Comments: {comment}
+
+{"The container has been permanently deleted from the system." if status == "approved" else "The container remains in the system."}
+
+Best regards,
+Kinross Chemical Safety Team
+        """
+        
+        msg.attach(MIMEText(body, 'plain'))
+        
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        server.sendmail(NOTIFICATION_FROM_EMAIL, requester_email, msg.as_string())
+        server.quit()
+        
+        logger.info("Deletion decision notification sent", 
+                   requester_email=requester_email, 
+                   status=status)
+        
+    except Exception as e:
+        logger.error("Failed to send deletion decision notification", error=str(e))
+
+async def send_admin_review_to_hod(container_data: dict, admin_name: str, user_reason: str, admin_comment: str, admin_recommendation: str):
+    """Send notification to HOD after admin reviews deletion request"""
+    try:
+        # # Get all HOD emails
+        # hod_users = await execute_query(
+        #     "SELECT email, name FROM users WHERE role = 'hod' AND active = true"
+        # )
+        
+        # if not hod_users:
+        #     logger.warning("No HOD users found to notify")
+        #     return
+        
+        hod_emails = HOD_EMAILS #[user['email'] for user in hod_users]
+        
+        recommendation_text = "RECOMMENDS APPROVAL" if admin_recommendation == 'approve' else "RECOMMENDS REJECTION"
+        
+        msg = MIMEMultipart()
+        msg['From'] = NOTIFICATION_FROM_EMAIL
+        msg['To'] = ', '.join(hod_emails)
+        msg['Subject'] = f"Deletion Request Ready for HOD Approval - {container_data['container']}"
+        
+        body = f"""
+Container Deletion Request - HOD APPROVAL REQUIRED
+
+ADMIN REVIEW COMPLETED - {recommendation_text}
+
+CONTAINER DETAILS:
+─────────────────────────────────────────
+Container ID: {container_data['container']}
+Department: {container_data['department']}
+Location: {container_data['location']}
+Submitted By: {container_data.get('submitted_by', 'N/A')}
+
+USER'S DELETION REASON:
+─────────────────────────────────────────
+{user_reason}
+
+ADMIN REVIEW:
+─────────────────────────────────────────
+Reviewed By: {admin_name}
+Recommendation: {recommendation_text}
+Admin Comments:
+{admin_comment}
+
+ACTION REQUIRED:
+─────────────────────────────────────────
+As Head of Department, please make the final decision on this deletion request.
+Login to the Chemical Safety System to approve or reject.
+
+System URL: [Your System URL Here]
+
+Best regards,
+Kinross Chemical Safety System (Automated Notification)
+        """
+        
+        msg.attach(MIMEText(body, 'plain'))
+        
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        server.sendmail(NOTIFICATION_FROM_EMAIL, hod_emails, msg.as_string())
+        server.quit()
+        
+        logger.info("HOD notification sent after admin review", 
+                   container_id=container_data['container'])
+        
+    except Exception as e:
+        logger.error("Failed to send HOD notification", error=str(e))
+
 def create_access_token(data: dict, expires_delta: timedelta = None):
     """Create JWT access token"""
     to_encode = data.copy()
@@ -967,7 +1159,7 @@ async def get_pending_containers(authorization: str = Header(None)):
     try:
         current_user = await get_current_user_from_token(authorization)
         
-        if current_user['role'] != 'admin':
+        if current_user['role'] not in ['hod', 'admin']:
             raise HTTPException(status_code=403, detail="Admin access required")
         
         container_rows = await execute_query("""
@@ -1051,7 +1243,7 @@ async def approve_container(
     try:
         current_user = await get_current_user_from_token(authorization)
         
-        if current_user['role'] != 'admin':
+        if current_user['role'] not in ['hod', 'admin']:
             raise HTTPException(status_code=403, detail="Admin access required")
 
         # VALIDATION - Check for non-empty comment
@@ -1109,7 +1301,7 @@ async def delete_container(container_id: int, authorization: str = Header(None))
     try:
         current_user = await get_current_user_from_token(authorization)
         
-        if current_user['role'] != 'admin':
+        if current_user['role'] not in ['hod', 'admin']:
             raise HTTPException(status_code=403, detail="Admin access required")
         
         # Check if container exists
@@ -1131,6 +1323,368 @@ async def delete_container(container_id: int, authorization: str = Header(None))
     except Exception as e:
         logger.error("Error deleting container", error=str(e))
         raise HTTPException(status_code=500, detail=f"Error deleting container: {str(e)}")
+
+@app.post("/containers/{container_id}/request-deletion")
+async def request_container_deletion(
+    container_id: int,
+    deletion_request: DeletionRequest,
+    authorization: str = Header(None)
+):
+    """Request deletion of a container (requires HOD approval)"""
+    try:
+        current_user = await get_current_user_from_token(authorization)
+        
+        # Only regular users can request deletions
+        if current_user['role'] != 'user':
+            raise HTTPException(status_code=403, detail="Only regular users can request container deletions")
+        
+        # Validate reason
+        if not deletion_request.reason or deletion_request.reason.strip() == "":
+            raise HTTPException(status_code=400, detail="Deletion reason is required")
+        
+        if len(deletion_request.reason.strip()) < 20:
+            raise HTTPException(
+                status_code=400,
+                detail="Deletion reason must be at least 20 characters long"
+            )
+        
+        # Check if container exists
+        container = await execute_single(
+            "SELECT * FROM containers WHERE id = $1", 
+            container_id
+        )
+        if not container:
+            raise HTTPException(status_code=404, detail="Container not found")
+
+        # User can only delete their own containers
+        if container['submitted_by'] != current_user['name']:
+            raise HTTPException(
+                status_code=403,
+                detail="You can only request deletion of your own containers"
+            )
+                
+        # Check if there's already a pending deletion request
+        existing_request = await execute_single(
+            "SELECT * FROM deletion_requests WHERE container_id = $1 AND status = 'pending'",
+            container_id
+        )
+        if existing_request:
+            raise HTTPException(
+                status_code=400, 
+                detail="A deletion request is already pending for this container"
+            )
+        
+        # Create deletion request
+        request_id = await execute_value("""
+            INSERT INTO deletion_requests 
+            (container_id, requested_by, requested_by_email, request_reason)
+            VALUES ($1, $2, $3, $4)
+            RETURNING id
+        """, container_id, current_user['name'], current_user['email'], deletion_request.reason.strip())
+        
+        # Get full container data for email
+        container_data = {
+            'container': container['container'],
+            'department': container['department'],
+            'location': container['location'],
+            'container_type': container['container_type'],
+            'status': container['status'],
+            'submitted_by': container['submitted_by'],
+            'submitted_at': container['submitted_at'].isoformat()
+        }
+        
+        # Send notification to ADMINs (not HODs)
+        await send_deletion_request_to_admin(
+            container_data,
+            current_user['name'],
+            current_user['email'],
+            deletion_request.reason.strip()
+        )
+        
+        logger.info("Deletion request created", 
+                   container_id=container_id, 
+                   request_id=request_id,
+                   requested_by=current_user['name'])
+        
+        return {
+            "message": "Deletion request submitted successfully. Admin will review your request.",
+            "request_id": request_id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error creating deletion request", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Error creating deletion request: {str(e)}")
+
+@app.post("/deletion-requests/{request_id}/admin-review")
+async def admin_review_deletion(
+    request_id: int,
+    review: AdminReviewRequest,
+    authorization: str = Header(None)
+):
+    """Admin reviews deletion request and forwards to HOD"""
+    try:
+        current_user = await get_current_user_from_token(authorization)
+        
+        # Only admins can review
+        if current_user['role'] != 'admin':
+            raise HTTPException(status_code=403, detail="Admin access required")
+        
+        # Validate comment
+        if not review.comment or review.comment.strip() == "":
+            raise HTTPException(status_code=400, detail="Admin review comment is required")
+        
+        if len(review.comment.strip()) < 10:
+            raise HTTPException(
+                status_code=400,
+                detail="Admin review comment must be at least 10 characters long"
+            )
+        
+        # Validate recommendation
+        if review.recommendation not in ['approve', 'reject']:
+            raise HTTPException(status_code=400, detail="Recommendation must be 'approve' or 'reject'")
+        
+        # Get deletion request
+        deletion_req = await execute_single(
+            "SELECT * FROM deletion_requests WHERE id = $1",
+            request_id
+        )
+        if not deletion_req:
+            raise HTTPException(status_code=404, detail="Deletion request not found")
+        
+        if deletion_req['admin_reviewed']:
+            raise HTTPException(status_code=400, detail="This request has already been reviewed by admin")
+        
+        if deletion_req['status'] != 'pending':
+            raise HTTPException(status_code=400, detail="This request is not in pending status")
+        
+        # Update deletion request with admin review
+        await execute_command("""
+            UPDATE deletion_requests
+            SET admin_reviewed = true,
+                admin_reviewer = $1,
+                admin_reviewer_email = $2,
+                admin_review_comment = $3,
+                admin_review_date = $4,
+                status = 'admin_reviewed'
+            WHERE id = $5
+        """, current_user['name'], current_user['email'], 
+            review.comment.strip(), datetime.utcnow(), request_id)
+        
+        # Get container data for email
+        container = await execute_single(
+            "SELECT * FROM containers WHERE id = $1",
+            deletion_req['container_id']
+        )
+        
+        container_data = {
+            'container': container['container'],
+            'department': container['department'],
+            'location': container['location'],
+            'container_type': container['container_type'],
+            'submitted_by': container['submitted_by']
+        }
+        
+        # Send notification to HOD
+        await send_admin_review_to_hod(
+            container_data,
+            current_user['name'],
+            deletion_req['request_reason'],
+            review.comment.strip(),
+            review.recommendation
+        )
+        
+        logger.info("Admin reviewed deletion request",
+                   request_id=request_id,
+                   admin=current_user['name'],
+                   recommendation=review.recommendation)
+        
+        return {
+            "message": f"Admin review submitted successfully. Request forwarded to HOD with recommendation to {review.recommendation}.",
+            "forwarded_to_hod": True
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error in admin review", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Error processing admin review: {str(e)}")
+
+@app.get("/deletion-requests/pending")
+async def get_pending_deletion_requests(authorization: str = Header(None)):
+    """Get pending deletion requests (Admin sees pending, HOD sees admin_reviewed)"""
+    try:
+        current_user = await get_current_user_from_token(authorization)
+        
+        if current_user['role'] not in ['admin', 'hod']:
+            raise HTTPException(status_code=403, detail="Admin or HOD access required")
+        
+        # Admin sees pending (not yet reviewed)
+        # HOD sees admin_reviewed (reviewed by admin, awaiting HOD decision)
+        if current_user['role'] == 'admin':
+            status_filter = 'pending'
+        else:  # HOD
+            status_filter = 'admin_reviewed'
+        
+        requests = await execute_query("""
+            SELECT 
+                dr.*,
+                c.container, c.department, c.location, c.container_type, 
+                c.status as container_status, c.submitted_by, c.submitted_at
+            FROM deletion_requests dr
+            JOIN containers c ON dr.container_id = c.id
+            WHERE dr.status = $1
+            ORDER BY dr.request_date ASC
+        """, status_filter)
+        
+        result = []
+        for req in requests:
+            item = {
+                "id": req['id'],
+                "container_id": req['container_id'],
+                "container": req['container'],
+                "department": req['department'],
+                "location": req['location'],
+                "container_type": req['container_type'],
+                "container_status": req['container_status'],
+                "submitted_by": req['submitted_by'],
+                "submitted_at": req['submitted_at'].isoformat(),
+                "requested_by": req['requested_by'],
+                "requested_by_email": req['requested_by_email'],
+                "request_reason": req['request_reason'],
+                "request_date": req['request_date'].isoformat(),
+                "admin_reviewed": req['admin_reviewed']
+            }
+            
+            # Add admin review info if available (for HOD)
+            if req['admin_reviewed']:
+                item.update({
+                    "admin_reviewer": req['admin_reviewer'],
+                    "admin_review_comment": req['admin_review_comment'],
+                    "admin_review_date": req['admin_review_date'].isoformat() if req['admin_review_date'] else None
+                })
+            
+            result.append(item)
+        
+        logger.info("Retrieved deletion requests", 
+                   role=current_user['role'],
+                   status_filter=status_filter,
+                   count=len(result))
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error fetching deletion requests", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Error fetching deletion requests: {str(e)}")
+
+@app.post("/deletion-requests/{request_id}/hod-decision")
+async def hod_final_decision(
+    request_id: int,
+    decision: HODDecisionRequest,
+    authorization: str = Header(None)
+):
+    """HOD makes final decision on deletion request (after admin review)"""
+    try:
+        current_user = await get_current_user_from_token(authorization)
+        
+        if current_user['role'] != 'hod':
+            raise HTTPException(status_code=403, detail="HOD access required")
+        
+        # Validate comment
+        if not decision.comment or decision.comment.strip() == "":
+            raise HTTPException(status_code=400, detail="HOD decision comment is required")
+        
+        if len(decision.comment.strip()) < 10:
+            raise HTTPException(
+                status_code=400,
+                detail="HOD decision comment must be at least 10 characters long"
+            )
+        
+        # Validate decision
+        if decision.decision not in ['approved', 'rejected']:
+            raise HTTPException(status_code=400, detail="Decision must be 'approved' or 'rejected'")
+        
+        # Get deletion request
+        deletion_req = await execute_single(
+            "SELECT * FROM deletion_requests WHERE id = $1",
+            request_id
+        )
+        if not deletion_req:
+            raise HTTPException(status_code=404, detail="Deletion request not found")
+        
+        # Must be admin_reviewed before HOD can decide
+        if deletion_req['status'] != 'admin_reviewed':
+            raise HTTPException(
+                status_code=400, 
+                detail="This request must be reviewed by admin first"
+            )
+        
+        if not deletion_req['admin_reviewed']:
+            raise HTTPException(
+                status_code=400,
+                detail="Admin review is required before HOD decision"
+            )
+        
+        # Update deletion request with HOD decision
+        await execute_command("""
+            UPDATE deletion_requests
+            SET status = $1,
+                hod_reviewer = $2,
+                hod_reviewer_email = $3,
+                hod_review_comment = $4,
+                hod_review_date = $5
+            WHERE id = $6
+        """, decision.decision, current_user['name'], current_user['email'],
+            decision.comment.strip(), datetime.utcnow(), request_id)
+        
+        # If approved, delete the container
+        container_deleted = False
+        container_name = None
+        if decision.decision == 'approved':
+            container_id = deletion_req['container_id']
+            
+            # Get container info before deletion
+            container = await execute_single(
+                "SELECT container FROM containers WHERE id = $1",
+                container_id
+            )
+            container_name = container['container'] if container else f"ID {container_id}"
+            
+            # Delete container (CASCADE will handle related records)
+            await execute_command("DELETE FROM containers WHERE id = $1", container_id)
+            container_deleted = True
+            
+            logger.info("Container deleted via HOD final approval",
+                       container_id=container_id,
+                       hod=current_user['name'])
+        
+        # Send notification to original requester
+        await send_deletion_decision_notification(
+            container_name or deletion_req['container_id'],
+            deletion_req['requested_by_email'],
+            deletion_req['requested_by'],
+            decision.decision,
+            decision.comment.strip(),
+            current_user['name']
+        )
+        
+        logger.info("HOD made final deletion decision",
+                   request_id=request_id,
+                   decision=decision.decision,
+                   hod=current_user['name'])
+        
+        return {
+            "message": f"Deletion request {decision.decision} successfully by HOD",
+            "container_deleted": container_deleted
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error in HOD decision", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Error processing HOD decision: {str(e)}")
 
 # API Health Check
 @app.get("/health")
