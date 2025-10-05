@@ -3553,7 +3553,7 @@ function App() {
                     {/* First Row: Department, Submitted By, Container Type */}
                     <div style={{
                       display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
                       gap: '1rem'
                     }}>
                       <div>
@@ -3632,7 +3632,7 @@ function App() {
                       gap: '1rem',
                       flexWrap: 'wrap'
                     }}>
-                      <div style={{ flex: '1', minWidth: '200px' }}>
+                      <div style={{ flex: '1', minWidth: '150px' }}>
                         <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', fontSize: '0.9rem' }}>
                           Start Date
                           <input
@@ -3652,7 +3652,7 @@ function App() {
                         </label>
                       </div>
 
-                      <div style={{ flex: '1', minWidth: '200px' }}>
+                      <div style={{ flex: '1', minWidth: '150px' }}>
                         <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', fontSize: '0.9rem' }}>
                           End Date
                           <input
@@ -3672,7 +3672,7 @@ function App() {
                         </label>
                       </div>
 
-                      <div style={{ flex: '1', minWidth: '200px', display: 'flex', flexDirection: 'column' }}>
+                      <div style={{ flex: '1', minWidth: '150px', display: 'flex', flexDirection: 'column' }}>
                         <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', fontSize: '0.9rem', visibility: 'hidden' }}>
                           Actions
                         </label>

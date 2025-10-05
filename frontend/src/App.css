@@ -2132,3 +2132,202 @@
     justify-content: center;
   }
 }
+
+/* Mobile Responsive Fixes */
+@media (max-width: 768px) {
+  /* Header adjustments */
+  .app-header {
+    padding: 1rem;
+  }
+
+  .app-header h1 {
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .kinross-subtitle {
+    font-size: 0.9rem;
+  }
+
+  /* Logo row in header */
+  .app-header > div:first-child {
+    flex-direction: column !important;
+    gap: 1rem !important;
+  }
+
+  .app-header img {
+    max-height: 40px !important;
+  }
+
+  /* Navigation buttons */
+  .app-header nav {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .app-header nav button {
+    width: 100%;
+    font-size: 0.9rem;
+    padding: 0.75rem 1rem;
+  }
+
+  /* User info section */
+  .app-header > div {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 0.75rem !important;
+  }
+
+  /* Main content */
+  .main-content {
+    padding: 0 1rem;
+  }
+
+  /* Form sections */
+  .container-form-section,
+  .containers-view {
+    padding: 1.5rem;
+  }
+
+  .form-header h2 {
+    font-size: 1.5rem;
+  }
+
+  /* Form grid - single column on mobile */
+  .form-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* GHS cards grid */
+  .ghs-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)) !important;
+  }
+
+  /* Analytics filters - stack vertically on mobile */
+  .containers-view > div > div:first-child > div:first-child {
+    grid-template-columns: 1fr !important;
+  }
+
+  .containers-view > div > div:first-child > div:last-child {
+    flex-direction: column !important;
+  }
+
+  .containers-view > div > div:first-child > div:last-child > div {
+    width: 100% !important;
+    min-width: 100% !important;
+  }
+
+  /* Charts grid - single column on mobile */
+  .containers-view > div:last-child > div {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* DonutChart adjustments */
+  .containers-view svg {
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* Container cards */
+  .container-card {
+    padding: 1rem;
+  }
+
+  .container-meta {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Pair results */
+  .pair-result {
+    padding: 0.75rem;
+  }
+
+  .pair-names {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .pair-details {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  /* Form actions */
+  .form-actions {
+    flex-direction: column;
+  }
+
+  .form-actions button {
+    width: 100%;
+  }
+
+  /* Matrix popup */
+  .matrix-popup-modal {
+    width: 95vw !important;
+    max-height: 90vh !important;
+    margin: 1rem;
+  }
+
+  .matrix-popup-header h2 {
+    font-size: 1.3rem;
+  }
+
+  /* Auth modal */
+  .app-header + div > div > div {
+    width: 90vw !important;
+    padding: 1.5rem !important;
+  }
+
+  /* Logout button */
+  .app-header button[style*="kinross-safety-red"] {
+    width: 100%;
+    margin-top: 0.5rem;
+  }
+}
+
+/* Extra small devices */
+@media (max-width: 480px) {
+  .app-header h1 {
+    font-size: 1.2rem;
+  }
+
+  .kinross-subtitle {
+    font-size: 0.8rem;
+  }
+
+  .ghs-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .form-header h2 {
+    font-size: 1.2rem;
+  }
+
+  .app-header nav button {
+    font-size: 0.85rem;
+    padding: 0.65rem 0.85rem;
+  }
+}
+
+/* Prevent horizontal scrolling */
+body {
+  overflow-x: hidden;
+}
+
+.App {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+/* Fix input fields on mobile */
+input[type="text"],
+input[type="email"],
+input[type="number"],
+input[type="date"],
+select,
+textarea {
+  font-size: 16px !important; /* Prevents zoom on iOS */
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
