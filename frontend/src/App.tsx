@@ -1893,6 +1893,16 @@ function App() {
     return Object.entries(stats).map(([name, value]) => ({ name, value }));
   };
 
+  const getStatusStats = () => {
+    const filtered = getFilteredAnalytics();
+    const stats: {[key: string]: number} = {};
+    filtered.forEach(item => {
+      const status = item.status.charAt(0).toUpperCase() + item.status.slice(1); // Capitalize first letter
+      stats[status] = (stats[status] || 0) + 1;
+    });
+    return Object.entries(stats).map(([name, value]) => ({ name, value }));
+  };
+
   const getUniqueValues = (field: 'department' | 'submitted_by' | 'container_type') => {
     return [...new Set(analyticsData.map(item => item[field]))].sort();
   };
@@ -2000,27 +2010,56 @@ function App() {
   };
 
   const AuthModal = () => (
+  <div style={{
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(30, 58, 95, 0.9)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 9999
+  }}>
     <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: 'rgba(30, 58, 95, 0.9)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 9999
+      background: 'white',
+      borderRadius: '12px',
+      padding: '2rem',
+      width: '450px',
+      maxWidth: '90vw',
+      boxSizing: 'border-box',
+      boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
     }}>
-      <div style={{
-        background: 'white',
-        borderRadius: '12px',
-        padding: '2rem',
-        width: '450px',                // ✅ Changed from minWidth/maxWidth
-        maxWidth: '90vw',              // ✅ Responsive
-        boxSizing: 'border-box',       // ✅ Added
-        boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
-      }}>
+        {/* Logo Row */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '1.5rem',
+          paddingBottom: '1rem',
+          borderBottom: '2px solid var(--kinross-light-gray)'
+        }}>
+          <img 
+            src="/kinross-logo.png" 
+            alt="Kinross Gold Corporation" 
+            style={{
+              height: '50px',
+              objectFit: 'contain',
+              maxWidth: '45%'
+            }}
+          />
+          <img 
+            src="/safeground-logo.png" 
+            alt="Safeground" 
+            style={{
+              height: '40px',
+              objectFit: 'contain',
+              maxWidth: '45%'
+            }}
+          />
+        </div>
+
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
           <h2 style={{ color: 'var(--kinross-navy)', marginBottom: '0.5rem' }}>
             Chemical Safety System
@@ -2086,7 +2125,6 @@ function App() {
             </p>
             <label style={{ display: 'block', marginBottom: '1rem', fontWeight: '600' }}>
               Verification Code:
-              {/* // Fix for verification code input */}
               <input
                 type="text"
                 value={authCode}
@@ -2100,11 +2138,12 @@ function App() {
                   borderRadius: '6px',
                   fontSize: '1.5rem',
                   textAlign: 'center',
-                  letterSpacing: '0.5rem'
+                  letterSpacing: '0.5rem',
+                  boxSizing: 'border-box'
                 }}
                 maxLength={6}
                 autoComplete="one-time-code"
-                autoFocus  // Add this line
+                autoFocus
                 onKeyPress={(e) => e.key === 'Enter' && authCode.length === 6 && verifyCode()}
               />
             </label>
@@ -2197,6 +2236,38 @@ function App() {
       {authState.user && !showAuth && (
         <>
           <header className="app-header">
+            {/* Logo Row */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '1.5rem',
+              paddingBottom: '1rem',
+              borderBottom: '2px solid var(--kinross-light-gray)',
+              flexWrap: 'wrap',
+              gap: '1rem'
+            }}>
+              <img 
+                src="/kinross-logo.png" 
+                alt="Kinross Gold Corporation" 
+                style={{
+                  height: '60px',
+                  objectFit: 'contain',
+                  maxWidth: '200px'
+                }}
+              />
+              <img 
+                src="/safeground-logo.png" 
+                alt="Safeground" 
+                style={{
+                  height: '50px',
+                  objectFit: 'contain',
+                  maxWidth: '200px'
+                }}
+              />
+            </div>
+
+            {/* Title Section */}
             <h1>Chemical Container Safety Assessment</h1>
             <p className="kinross-subtitle">Kinross Gold Corporation - DOT Hazard Class Compatibility System</p>
       
@@ -3669,6 +3740,11 @@ function App() {
                       data={getSubstanceStats()}
                       title="⚗️ By Hazard Classes"
                       colors={['#F44336', '#FF9800', '#FF5722', '#9C27B0', '#673AB7', '#3F51B5', '#2196F3', '#009688', '#4CAF50', '#8BC34A', '#CDDC39', '#FFC107']}
+                    />
+                    <DonutChart
+                      data={getStatusStats()}
+                      title="✅ By Container Status"
+                      colors={['#4CAF50', '#FF9800', '#F44336', '#2196F3']}
                     />
                   </div>
                 )}
