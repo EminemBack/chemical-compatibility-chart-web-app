@@ -3723,7 +3723,7 @@ function App() {
                 ) : (
                   <div style={{
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', // replace with minmax(300px, 1fr) to fit chart in phone
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', // replace with minmax(300px, 1fr) to fit chart in phone
                     gap: '2rem'
                   }}>
                     <DonutChart
