@@ -1165,7 +1165,7 @@ const DonutChart: React.FC<{
 const generateContainerPDF = async (container: ContainerData, hazardCategories: HazardCategory[]) => {
   try {
     // Generate QR Code first
-    const containerDetailURL = `${window.location.origin}/container-pdf/${container.id}`;
+    const containerDetailURL = `${API_BASE}/container-pdf/${container.id}`;
     const qrCodeDataURL = await QRCode.toDataURL(containerDetailURL, {
       width: 330,
       margin: 2,
