@@ -970,6 +970,101 @@ async def get_containers(authorization: str = Header(None)):
         logger.error("Error fetching containers", error=str(e))
         raise HTTPException(status_code=500, detail=f"Error fetching containers: {str(e)}")
 
+@app.get("/container-pdf/{container_id}")
+async def download_container_pdf(container_id: int):
+    """Direct download endpoint for container PDF via QR code"""
+    try:
+        # Get container data
+        container = await execute_single(
+            "SELECT * FROM containers WHERE id = $1", 
+            container_id
+        )
+        
+        if not container:
+            raise HTTPException(status_code=404, detail="Container not found")
+        
+        # Return HTML page that triggers PDF download
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Container {container['container']} - Download PDF</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+                body {{
+                    font-family: Arial, sans-serif;
+                    background: linear-gradient(135deg, #1E3A5F 0%, #162B47 100%);
+                    color: white;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    min-height: 100vh;
+                    margin: 0;
+                    padding: 20px;
+                }}
+                .container {{
+                    background: white;
+                    color: #1E3A5F;
+                    padding: 3rem;
+                    border-radius: 12px;
+                    text-align: center;
+                    max-width: 500px;
+                    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                }}
+                h1 {{ margin: 0 0 1rem 0; color: #D4A553; }}
+                p {{ font-size: 1.1rem; margin: 1rem 0; }}
+                .info {{ 
+                    background: #f5f5f5; 
+                    padding: 1rem; 
+                    border-radius: 8px; 
+                    margin: 1.5rem 0;
+                }}
+                .download-btn {{
+                    display: inline-block;
+                    background: linear-gradient(135deg, #D4A553, #B8933A);
+                    color: white;
+                    padding: 1rem 2rem;
+                    border-radius: 6px;
+                    text-decoration: none;
+                    font-weight: bold;
+                    font-size: 1.1rem;
+                    margin-top: 1rem;
+                    cursor: pointer;
+                    border: none;
+                }}
+                .download-btn:hover {{
+                    background: linear-gradient(135deg, #B8933A, #D4A553);
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>🛡️ Container Safety Label</h1>
+                <div class="info">
+                    <p><strong>Container ID:</strong> {container['container']}</p>
+                    <p><strong>Department:</strong> {container['department']}</p>
+                    <p><strong>Location:</strong> {container['location']}</p>
+                </div>
+                <p>Click the button below to download the safety label PDF</p>
+                <button class="download-btn" onclick="window.location.href='/?download={container_id}'">
+                    📄 Download PDF
+                </button>
+                <p style="font-size: 0.9rem; margin-top: 2rem; color: #666;">
+                    Kinross Gold Corporation<br/>
+                    Chemical Safety Assessment System
+                </p>
+            </div>
+        </body>
+        </html>
+        """
+        
+        from fastapi.responses import HTMLResponse
+        return HTMLResponse(content=html_content)
+        
+    except Exception as e:
+        logger.error("Error in PDF download endpoint", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
 async def get_current_user_from_token(authorization: str = None):
     """Extract user from JWT token"""
     try:

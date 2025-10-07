@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+import QRCode from 'qrcode';
 
 interface HazardCategory {
   id: number;
@@ -1158,6 +1161,165 @@ const DonutChart: React.FC<{
   );
 };
 
+// Add this function before the App component
+const generateContainerPDF = async (container: ContainerData, hazardCategories: HazardCategory[]) => {
+  try {
+    // Generate QR Code first
+    const containerDetailURL = `${window.location.origin}/container-pdf/${container.id}`;
+    const qrCodeDataURL = await QRCode.toDataURL(containerDetailURL, {
+      width: 330,
+      margin: 2,
+      color: {
+        dark: '#000000',
+        light: '#FFFFFF'
+      }
+    });
+
+    // Create a hidden container for PDF generation - A3 landscape size
+    const pdfContainer = document.createElement('div');
+    pdfContainer.style.position = 'absolute';
+    pdfContainer.style.left = '-9999px';
+    pdfContainer.style.width = '3508px';
+    pdfContainer.style.height = '2480px';
+    pdfContainer.style.background = 'white';
+    pdfContainer.style.padding = '0';
+    pdfContainer.style.margin = '0';
+    
+    // Map hazard names to IDs for checkbox marking
+    const selectedHazardIds = container.hazards.map(h => {
+      const hazard = hazardCategories.find(hc => hc.name === h.name);
+      return hazard ? hazard.id : 0;
+    }).filter(id => id > 0);
+
+    // Build HTML matching your A3 template
+    pdfContainer.innerHTML = `
+      <div style="font-family: Arial, sans-serif; background: black; color: white; 
+                  width: 3508px; height: 2480px; padding: 100px; box-sizing: border-box; position: relative;">
+        
+        <!-- Container ID -->
+        <div style="margin-bottom: 55px; display: flex; align-items: center; gap: 30px;">
+          <div style="font-size: 60px; font-weight: bold; white-space: nowrap;">Container ID:</div>
+          <div style="background: white; color: black; padding: 32px 48px; border-radius: 18px; 
+                      font-size: 52px; font-weight: 600; flex: 1;">
+            ${container.container}
+          </div>
+        </div>
+
+        <!-- Responsible Group -->
+        <div style="margin-bottom: 55px; display: flex; align-items: center; gap: 30px;">
+          <div style="font-size: 60px; font-weight: bold; white-space: nowrap;">Responsible Group:</div>
+          <div style="background: white; color: black; padding: 32px 48px; border-radius: 18px; 
+                      font-size: 52px; font-weight: 600; flex: 1;">
+            ${container.department}
+          </div>
+        </div>
+
+        <!-- Responsible Person/Phone Number -->
+        <div style="margin-bottom: 55px; display: flex; align-items: center; gap: 30px;">
+          <div style="font-size: 60px; font-weight: bold; white-space: nowrap;">Responsible Person/Phone Number:</div>
+          <div style="background: white; color: black; padding: 32px 48px; border-radius: 18px; 
+                      font-size: 52px; font-weight: 600; flex: 1;">
+            ${container.submitted_by}
+          </div>
+        </div>
+
+        <!-- Container Use -->
+        <div style="margin-bottom: 55px; display: flex; align-items: center; gap: 30px;">
+          <div style="font-size: 60px; font-weight: bold; white-space: nowrap;">Container Use:</div>
+          <div style="background: white; color: black; padding: 32px 48px; border-radius: 18px; 
+                      font-size: 52px; min-height: 100px; flex: 1;">
+            &nbsp;
+          </div>
+        </div>
+
+        <!-- HAZARDS Section - WHITE BACKGROUND -->
+        <div style="margin-bottom: 55px;">
+          <h2 style="font-size: 68px; font-weight: bold; margin: 0 0 32px 0;">HAZARDS:</h2>
+          <div style="background: white; padding: 65px; border-radius: 40px;">
+            <div style="display: grid; grid-template-columns: repeat(11, 1fr); gap: 32px; align-items: end;">
+              ${hazardCategories.map(hazard => {
+                const isSelected = selectedHazardIds.includes(hazard.id);
+                return `
+                  <div style="text-align: center;">
+                    <img src="${window.location.origin}${hazard.logo_path}" 
+                        alt="${hazard.name}" 
+                        style="width: 200px; height: 200px; object-fit: contain; margin-bottom: 24px; display: block; margin-left: auto; margin-right: auto;" />
+                    <div style="width: 115px; height: 115px; border: 6px solid #333; 
+                                background: white; margin: 0 auto; display: flex; 
+                                align-items: center; justify-content: center; border-radius: 12px;">
+                      ${isSelected ? '<span style="font-size: 85px; color: #4CAF50; font-weight: bold; line-height: 1;">✓</span>' : ''}
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        </div>
+
+        <!-- Precautions Section - WHITE BACKGROUND with QR Code -->
+        <div style="margin-top: 55px; position: relative;">
+          <h2 style="font-size: 68px; font-weight: bold; margin: 0 0 32px 0;">Precautions for Entering the Container:</h2>
+          <div style="background: white; padding: 65px; border-radius: 40px; position: relative;">
+            <ul style="color: black; font-size: 52px; line-height: 2.2; margin: 0; padding-left: 65px; padding-right: 400px;">
+              <li style="margin-bottom: 24px;">Ventilate container</li>
+              <li>Complete atmospheric testing prior to entering</li>
+            </ul>
+            
+            <!-- QR Code - Inside Precautions Section, Right Side, SMALLER SIZE -->
+            <div style="position: absolute; top: 50%; right: 65px; transform: translateY(-50%); text-align: center;">
+              <div style="background: white; padding: 15px; border-radius: 20px; border: 4px solid #ddd;">
+                <img src="${qrCodeDataURL}" 
+                    alt="QR Code" 
+                    style="width: 250px; height: 250px; display: block;" />
+                <div style="color: black; font-size: 20px; font-weight: bold; margin-top: 10px;">
+                  Scan to Download PDF
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(pdfContainer);
+
+    // Wait for images to load
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
+    // Generate PDF using html2canvas
+    const canvas = await html2canvas(pdfContainer, {
+      scale: 2,
+      backgroundColor: '#000000',
+      logging: false,
+      useCORS: true,
+      width: 3508,
+      height: 2480
+    });
+
+    // Remove temporary container
+    document.body.removeChild(pdfContainer);
+
+    // Create PDF with A3 landscape dimensions (420mm x 297mm)
+    const pdf = new jsPDF({
+      orientation: 'landscape',
+      unit: 'mm',
+      format: 'a3'
+    });
+
+    const imgData = canvas.toDataURL('image/png');
+    pdf.addImage(imgData, 'PNG', 0, 0, 420, 297);
+
+    // Save PDF
+    pdf.save(`Container_${container.container}_Safety_Label.pdf`);
+
+    return true;
+  } catch (error) {
+    console.error('Error generating PDF:', error);
+    alert('Failed to generate PDF. Please try again.');
+    return false;
+  }
+};
+
 function App() {
   const [hazardCategories, setHazardCategories] = useState<HazardCategory[]>([]);
   const [selectedHazards, setSelectedHazards] = useState<HazardCategory[]>([]);
@@ -1247,6 +1409,29 @@ function App() {
       generateContainerID(department).then(setContainer);
     }
   }, [department]); // Trigger when department changes
+
+  // Handle QR code download trigger
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const downloadId = urlParams.get('download');
+    
+    if (downloadId && authState.user) {
+      // Fetch container and generate PDF
+      fetch(`${API_BASE}/containers/`, {
+        headers: { 'Authorization': `Bearer ${authState.token}` }
+      })
+        .then(res => res.json())
+        .then(containers => {
+          const container = containers.find((c: ContainerData) => c.id === parseInt(downloadId));
+          if (container && container.status === 'approved') {
+            generateContainerPDF(container, hazardCategories);
+            // Clear URL parameter
+            window.history.replaceState({}, '', '/');
+          }
+        })
+        .catch(err => console.error('Error fetching container for download:', err));
+    }
+  }, [authState.user, authState.token]);
 
   const fetchHazardCategories = async () => {
     try {
@@ -3035,6 +3220,48 @@ function App() {
                               })
                             )}
                           </div>
+
+                          {/* PDF Download Button - Only for approved containers */}
+                          {container.status === 'approved' && (
+                            <div style={{ 
+                              marginTop: '1.5rem', 
+                              padding: '1rem', 
+                              background: '#f9f9f9', 
+                              borderRadius: '8px',
+                              display: 'flex',
+                              justifyContent: 'flex-end'
+                            }}>
+                              <button
+                                onClick={() => generateContainerPDF(container, hazardCategories)}
+                                style={{
+                                  padding: '0.875rem 2rem',
+                                  background: 'linear-gradient(135deg, var(--kinross-gold), var(--kinross-dark-gold))',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '6px',
+                                  cursor: 'pointer',
+                                  fontWeight: '700',
+                                  fontSize: '1rem',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '0.75rem',
+                                  boxShadow: '0 4px 15px rgba(212, 165, 83, 0.3)',
+                                  transition: 'all 0.3s ease'
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.transform = 'translateY(-2px)';
+                                  e.currentTarget.style.boxShadow = '0 6px 20px rgba(212, 165, 83, 0.4)';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.transform = 'translateY(0)';
+                                  e.currentTarget.style.boxShadow = '0 4px 15px rgba(212, 165, 83, 0.3)';
+                                }}
+                              >
+                                <span style={{ fontSize: '1.2rem' }}>📄</span>
+                                <span>Download Safety Label PDF</span>
+                              </button>
+                            </div>
+                          )}
                         </div>
 
                         {/* ADD THE DELETE BUTTON HERE (inside the container-card but after container-pairs): */}
@@ -3723,7 +3950,7 @@ function App() {
                 ) : (
                   <div style={{
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', // replace with minmax(300px, 1fr) to fit chart in phone
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', // replace with minmax(300px, 1fr) to fit chart in phone
                     gap: '2rem'
                   }}>
                     <DonutChart
