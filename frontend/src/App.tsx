@@ -1170,7 +1170,7 @@ const generateContainerPDF = async (container: ContainerData, hazardCategories: 
       width: 330,
       margin: 2,
       color: {
-        dark: '#000000',
+        dark: '#D4A553',
         light: '#FFFFFF'
       }
     });
