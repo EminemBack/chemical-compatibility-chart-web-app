@@ -1749,7 +1749,6 @@ function App() {
   };
 
   const requestVerificationCode = async () => {
-    console.log('API BASE:', API_BASE);
     setAuthLoading(true);
 
     try {
