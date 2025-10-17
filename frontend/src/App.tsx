@@ -1023,7 +1023,12 @@ const DonutChart: React.FC<{
   title: string;
   colors: string[];
 }> = ({ data, title, colors }) => {
-  if (data.length === 0) {
+  const [showModal, setShowModal] = React.useState(false);
+
+  // Filter out zero values for display, but keep track of original indices
+  const displayData = data.map((item, idx) => ({ ...item, originalIndex: idx })).filter(item => item.value > 0);
+
+  if (displayData.length === 0) {
     return (
       <div style={{
         textAlign: 'center',
@@ -1036,7 +1041,7 @@ const DonutChart: React.FC<{
     );
   }
 
-  const total = data.reduce((sum, item) => sum + item.value, 0);
+  const total = displayData.reduce((sum, item) => sum + item.value, 0);
   let currentAngle = -90;
 
   const createSlicePath = (startAngle: number, endAngle: number) => {
@@ -1059,105 +1064,304 @@ const DonutChart: React.FC<{
     return `M ${x1} ${y1} A ${outerRadius} ${outerRadius} 0 ${largeArc} 1 ${x2} ${y2} L ${x3} ${y3} A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${x4} ${y4} Z`;
   };
 
+  // Calculate label positions for lines extending from chart
+  const getLabelPosition = (startAngle: number, endAngle: number, index: number) => {
+    const midAngle = (startAngle + endAngle) / 2;
+    const midRad = (midAngle * Math.PI) / 180;
+    
+    // Point on outer edge of donut
+    const innerX = 100 + 90 * Math.cos(midRad);
+    const innerY = 100 + 90 * Math.sin(midRad);
+    
+    // Extended point for line
+    const outerX = 100 + 130 * Math.cos(midRad);
+    const outerY = 100 + 130 * Math.sin(midRad);
+    
+    return { innerX, innerY, outerX, outerY, midAngle };
+  };
+
+  const chartContent = () => {
+    let angleTracker = -90;
+    
+    return (
+      <svg width="300" height="300" viewBox="0 0 300 300">
+        {/* Draw donut slices */}
+        {displayData.map((item, idx) => {
+          const percentage = (item.value / total) * 100;
+          const angle = (percentage / 100) * 360;
+          const startAngle = angleTracker;
+          const endAngle = angleTracker + angle;
+
+          // Use originalIndex for color to maintain correct mapping
+          const colorIndex = item.originalIndex !== undefined ? item.originalIndex : idx;
+          
+          // Translate path to center of larger viewBox
+          const path = createSlicePath(startAngle, endAngle).replace(/(\d+)/g, (match) => {
+            const num = parseFloat(match);
+            return String(num + 50); // Offset to center in 300x300 viewBox
+          });
+          
+          const labelPos = getLabelPosition(startAngle, endAngle, idx);
+          
+          angleTracker += angle;
+
+          return (
+            <g key={idx}>
+              {/* Slice */}
+              <path
+                d={createSlicePath(startAngle, endAngle)}
+                fill={colors[colorIndex % colors.length]}  // ✅ Use originalIndex
+                stroke="white"
+                strokeWidth="2"
+                transform="translate(50, 50)"
+                style={{ transition: 'opacity 0.3s' }}
+              >
+                <title>{`${item.name}: ${item.value} (${percentage.toFixed(1)}%)`}</title>
+              </path>
+              
+              {/* Line from slice to label */}
+              <line
+                x1={labelPos.innerX + 50}
+                y1={labelPos.innerY + 50}
+                x2={labelPos.outerX + 50}
+                y2={labelPos.outerY + 50}
+                stroke={colors[colorIndex % colors.length]}  // ✅ Use originalIndex
+                strokeWidth="2"
+              />
+              
+              {/* Percentage label */}
+              <text
+                x={labelPos.outerX + 50 + (labelPos.midAngle > 90 && labelPos.midAngle < 270 ? -10 : 10)}
+                y={labelPos.outerY + 50}
+                textAnchor={labelPos.midAngle > 90 && labelPos.midAngle < 270 ? 'end' : 'start'}
+                dominantBaseline="middle"
+                style={{
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  fill: colors[colorIndex % colors.length]  // ✅ Use originalIndex
+                }}
+              >
+                {percentage.toFixed(1)}%
+              </text>
+            </g>
+          );
+        })}
+        
+        {/* Center text */}
+        <text
+          x="150"
+          y="145"
+          textAnchor="middle"
+          dominantBaseline="middle"
+          style={{
+            fontSize: '32px',
+            fontWeight: '700',
+            fill: 'var(--kinross-navy)'
+          }}
+        >
+          {total}
+        </text>
+        <text
+          x="150"
+          y="165"
+          textAnchor="middle"
+          dominantBaseline="middle"
+          style={{
+            fontSize: '14px',
+            fill: 'var(--kinross-dark-gray)'
+          }}
+        >
+          Total
+        </text>
+      </svg>
+    );
+  };
+
   return (
-    <div style={{
-      background: 'var(--kinross-white)',
-      borderRadius: '12px',
-      padding: '1.5rem',
-      boxShadow: '0 4px 15px rgba(30, 58, 95, 0.1)',
-      border: '1px solid var(--kinross-medium-gray)'
-    }}>
-      <h3 style={{
-        color: 'var(--kinross-navy)',
-        marginBottom: '1.5rem',
-        textAlign: 'center',
-        fontSize: '1.3rem'
-      }}>
-        {title}
-      </h3>
+    <>
+      {/* Compact Card View */}
+      <div 
+        style={{
+          background: 'var(--kinross-white)',
+          borderRadius: '12px',
+          padding: '1.5rem',
+          boxShadow: '0 4px 15px rgba(30, 58, 95, 0.1)',
+          border: '1px solid var(--kinross-medium-gray)',
+          cursor: 'pointer',
+          transition: 'all 0.3s ease',
+          textAlign: 'center'
+        }}
+        onClick={() => setShowModal(true)}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = 'translateY(-4px)';
+          e.currentTarget.style.boxShadow = '0 8px 25px rgba(30, 58, 95, 0.15)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = 'translateY(0)';
+          e.currentTarget.style.boxShadow = '0 4px 15px rgba(30, 58, 95, 0.1)';
+        }}
+      >
+        <h3 style={{
+          color: 'var(--kinross-navy)',
+          marginBottom: '1rem',
+          fontSize: '1.3rem'
+        }}>
+          {title}
+        </h3>
+        
+        {chartContent()}
+        
+        <div style={{
+          marginTop: '1rem',
+          fontSize: '0.85rem',
+          color: 'var(--kinross-dark-gray)',
+          fontStyle: 'italic'
+        }}>
+          👆 Click to view details
+        </div>
+      </div>
 
-      <div style={{ display: 'flex', gap: '2rem', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' }}>
-        <svg width="200" height="200" viewBox="0 0 200 200">
-          {data.map((item, idx) => {
-            const percentage = (item.value / total) * 100;
-            const angle = (percentage / 100) * 360;
-            const path = createSlicePath(currentAngle, currentAngle + angle);
-            const sliceAngle = currentAngle;
-            currentAngle += angle;
-
-            return (
-              <g key={idx}>
-                <path
-                  d={path}
-                  fill={colors[idx % colors.length]}
-                  stroke="white"
-                  strokeWidth="2"
-                  style={{ cursor: 'pointer', transition: 'opacity 0.3s' }}
-                  onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
-                  onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
-                >
-                  <title>{`${item.name}: ${item.value} (${percentage.toFixed(1)}%)`}</title>
-                </path>
-              </g>
-            );
-          })}
-          <text
-            x="100"
-            y="100"
-            textAnchor="middle"
-            dominantBaseline="middle"
+      {/* Modal Popup */}
+      {showModal && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(30, 58, 95, 0.85)',
+            backdropFilter: 'blur(5px)',
+            zIndex: 10000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+            animation: 'fadeIn 0.3s ease'
+          }}
+          onClick={() => setShowModal(false)}
+        >
+          <div 
             style={{
-              fontSize: '24px',
-              fontWeight: '700',
-              fill: 'var(--kinross-navy)'
+              background: 'white',
+              borderRadius: '16px',
+              maxWidth: '800px',
+              width: '100%',
+              maxHeight: '90vh',
+              overflow: 'auto',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+              border: '2px solid var(--kinross-gold)',
+              animation: 'slideIn 0.3s ease'
             }}
+            onClick={(e) => e.stopPropagation()}
           >
-            {total}
-          </text>
-          <text
-            x="100"
-            y="115"
-            textAnchor="middle"
-            dominantBaseline="middle"
-            style={{
-              fontSize: '12px',
-              fill: 'var(--kinross-dark-gray)'
-            }}
-          >
-            Total
-          </text>
-        </svg>
-
-        <div style={{ flex: 1, minWidth: '200px' }}>
-          {data.map((item, idx) => (
-            <div key={idx} style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.75rem',
-              marginBottom: '0.75rem',
-              padding: '0.5rem',
-              borderRadius: '6px',
-              background: 'var(--kinross-light-gray)'
+            {/* Modal Header */}
+            <div style={{
+              background: 'linear-gradient(135deg, var(--kinross-navy), var(--kinross-dark-navy))',
+              color: 'white',
+              padding: '1.5rem',
+              borderTopLeftRadius: '16px',
+              borderTopRightRadius: '16px',
+              position: 'relative'
             }}>
+              <h2 style={{ margin: 0, fontSize: '1.8rem' }}>{title}</h2>
+              <button
+                onClick={() => setShowModal(false)}
+                style={{
+                  position: 'absolute',
+                  top: '1rem',
+                  right: '1rem',
+                  background: 'rgba(255,255,255,0.2)',
+                  border: '2px solid rgba(255,255,255,0.3)',
+                  color: 'white',
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '50%',
+                  fontSize: '1.2rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.3s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.3)';
+                  e.currentTarget.style.transform = 'rotate(90deg)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.2)';
+                  e.currentTarget.style.transform = 'rotate(0deg)';
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div style={{ padding: '2rem' }}>
               <div style={{
-                width: '16px',
-                height: '16px',
-                borderRadius: '3px',
-                background: colors[idx % colors.length]
-              }} />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '0.9rem', fontWeight: '600', color: 'var(--kinross-navy)' }}>
-                  {item.name}
+                display: 'flex',
+                gap: '3rem',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexWrap: 'wrap'
+              }}>
+                {/* Chart */}
+                <div>
+                  {chartContent()}
                 </div>
-                <div style={{ fontSize: '0.8rem', color: 'var(--kinross-dark-gray)' }}>
-                  {item.value} ({((item.value / total) * 100).toFixed(1)}%)
+
+                {/* Legend */}
+                <div style={{ flex: 1, minWidth: '250px', maxWidth: '400px' }}>
+                  {displayData.map((item, idx) => {
+                    const colorIndex = item.originalIndex !== undefined ? item.originalIndex : idx;
+                    return (
+                      <div key={idx} style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '1rem',
+                        marginBottom: '1rem',
+                        padding: '0.75rem',
+                        borderRadius: '8px',
+                        background: 'var(--kinross-light-gray)',
+                        border: `2px solid ${colors[colorIndex % colors.length]}20`
+                      }}>
+                        <div style={{
+                          width: '24px',
+                          height: '24px',
+                          borderRadius: '4px',
+                          background: colors[colorIndex % colors.length],  // ✅ Use originalIndex
+                          flexShrink: 0
+                        }} />
+                        <div style={{ flex: 1 }}>
+                          <div style={{ 
+                            fontSize: '1rem', 
+                            fontWeight: '600', 
+                            color: 'var(--kinross-navy)',
+                            marginBottom: '0.25rem'
+                          }}>
+                            {item.name}
+                          </div>
+                          <div style={{ 
+                            fontSize: '0.9rem', 
+                            color: 'var(--kinross-dark-gray)',
+                            display: 'flex',
+                            gap: '1rem'
+                          }}>
+                            <span><strong>Count:</strong> {item.value}</span>
+                            <span><strong>Percentage:</strong> {((item.value / total) * 100).toFixed(1)}%</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
-          ))}
+          </div>
         </div>
-      </div>
-    </div>
+      )}
+    </>
   );
 };
 
@@ -1320,6 +1524,144 @@ const generateContainerPDF = async (container: ContainerData, hazardCategories: 
   }
 };
 
+const SuccessModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  containerName: string;
+}> = ({ isOpen, onClose, containerName }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: 'rgba(30, 58, 95, 0.85)',
+      backdropFilter: 'blur(5px)',
+      zIndex: 10000,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '1rem',
+      animation: 'fadeIn 0.3s ease'
+    }}>
+      <div style={{
+        background: 'white',
+        borderRadius: '20px',
+        maxWidth: '500px',
+        width: '100%',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+        border: '3px solid #4CAF50',
+        animation: 'slideIn 0.3s ease',
+        overflow: 'hidden'
+      }}>
+        {/* Success Icon */}
+        <div style={{
+          background: 'linear-gradient(135deg, #4CAF50, #45a049)',
+          padding: '2rem',
+          textAlign: 'center'
+        }}>
+          <div style={{
+            width: '80px',
+            height: '80px',
+            background: 'white',
+            borderRadius: '50%',
+            margin: '0 auto',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '3rem',
+            animation: 'scaleIn 0.5s ease'
+          }}>
+            ✅
+          </div>
+        </div>
+
+        {/* Content */}
+        <div style={{ padding: '2rem', textAlign: 'center' }}>
+          <h2 style={{
+            color: 'var(--kinross-navy)',
+            fontSize: '1.8rem',
+            marginBottom: '1rem',
+            fontWeight: '700'
+          }}>
+            🎉 Success!
+          </h2>
+          <p style={{
+            color: 'var(--kinross-dark-gray)',
+            fontSize: '1.1rem',
+            marginBottom: '0.5rem',
+            lineHeight: '1.6'
+          }}>
+            Container safety assessment submitted successfully!
+          </p>
+          <div style={{
+            background: 'var(--kinross-light-gray)',
+            padding: '1rem',
+            borderRadius: '10px',
+            margin: '1.5rem 0',
+            border: '2px solid var(--kinross-gold)'
+          }}>
+            <p style={{
+              margin: 0,
+              fontSize: '0.9rem',
+              color: 'var(--kinross-dark-gray)',
+              marginBottom: '0.5rem'
+            }}>
+              <strong>Container ID:</strong>
+            </p>
+            <p style={{
+              margin: 0,
+              fontSize: '1.3rem',
+              fontWeight: '700',
+              color: 'var(--kinross-gold)'
+            }}>
+              {containerName}
+            </p>
+          </div>
+          <p style={{
+            color: 'var(--kinross-dark-gray)',
+            fontSize: '0.95rem',
+            fontStyle: 'italic',
+            marginBottom: '1.5rem'
+          }}>
+            Your assessment is now pending approval
+          </p>
+          <button
+            onClick={onClose}
+            style={{
+              background: 'linear-gradient(135deg, var(--kinross-gold), var(--kinross-dark-gold))',
+              color: 'white',
+              border: 'none',
+              padding: '1rem 3rem',
+              borderRadius: '50px',
+              fontSize: '1.1rem',
+              fontWeight: '700',
+              cursor: 'pointer',
+              boxShadow: '0 4px 15px rgba(212, 165, 83, 0.3)',
+              transition: 'all 0.3s ease',
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = '0 6px 20px rgba(212, 165, 83, 0.4)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 4px 15px rgba(212, 165, 83, 0.3)';
+            }}
+          >
+            OK, Got It!
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 function App() {
   const [hazardCategories, setHazardCategories] = useState<HazardCategory[]>([]);
   const [selectedHazards, setSelectedHazards] = useState<HazardCategory[]>([]);
@@ -1353,6 +1695,9 @@ function App() {
 
   const [showAdminReviewModal, setShowAdminReviewModal] = useState(false);
   const [selectedRequestForReview, setSelectedRequestForReview] = useState<DeletionRequest | null>(null);
+
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [submittedContainerName, setSubmittedContainerName] = useState('');
 
   // AUTH STATES:
   const [authState, setAuthState] = useState<AuthState>({
@@ -2079,12 +2424,26 @@ function App() {
 
   const getStatusStats = () => {
     const filtered = getFilteredAnalytics();
-    const stats: {[key: string]: number} = {};
+    const stats: {[key: string]: number} = {
+      'Approved': 0,
+      'Pending': 0,
+      'Rejected': 0
+    };
+    
     filtered.forEach(item => {
-      const status = item.status.charAt(0).toUpperCase() + item.status.slice(1); // Capitalize first letter
-      stats[status] = (stats[status] || 0) + 1;
+      const status = item.status.charAt(0).toUpperCase() + item.status.slice(1);
+      if (status in stats) {
+        stats[status] = stats[status] + 1;
+      }
     });
-    return Object.entries(stats).map(([name, value]) => ({ name, value }));
+    
+    // Return in fixed order: Approved, Pending, Rejected
+    // KEEP ALL STATUSES even if value is 0 to maintain color mapping
+    return [
+      { name: 'Approved', value: stats['Approved'] },
+      { name: 'Pending', value: stats['Pending'] },
+      { name: 'Rejected', value: stats['Rejected']}
+    ];
   };
 
   const getUniqueValues = (field: 'department' | 'submitted_by' | 'container_type') => {
@@ -2149,8 +2508,11 @@ function App() {
 
       if (response.ok) {
         const result = await response.json();
-        alert(`Container safety assessment submitted successfully!\nContainer ID: ${result.container_id}`);
-        
+        // alert(`Container safety assessment submitted successfully!\nContainer ID: ${result.container_id}`);
+        // Store container name and show modal instead of alert
+        setSubmittedContainerName(result.container || container);
+        setShowSuccessModal(true);
+
         // Reset form (but keep user name)
         setDepartment('');
         setLocation('');
@@ -3970,7 +4332,7 @@ function App() {
                     <DonutChart
                       data={getStatusStats()}
                       title="✅ By Container Status"
-                      colors={['#4CAF50', '#FF9800', '#F44336', '#2196F3']}
+                      colors={['#4CAF50', '#FF9800', '#F44336']} // Approved=Green, Pending=Orange, Rejected=Red
                     />
                   </div>
                 )}
@@ -4041,6 +4403,13 @@ function App() {
           />          
         </>
       )}
+
+      {/* Success Modal */}
+      <SuccessModal
+        isOpen={showSuccessModal}
+        onClose={() => setShowSuccessModal(false)}
+        containerName={submittedContainerName}
+      />
     </div>
   );
 }
