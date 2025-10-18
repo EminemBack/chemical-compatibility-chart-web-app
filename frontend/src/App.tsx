@@ -24,6 +24,7 @@ interface ContainerData {
   department: string;
   location: string;
   submitted_by: string;
+  phone_number: string; // New field for phone number
   container: string;
   container_type: string;
   submitted_at: string;
@@ -1424,7 +1425,7 @@ const generateContainerPDF = async (container: ContainerData, hazardCategories: 
           <div style="font-size: 60px; font-weight: bold; white-space: nowrap;">Responsible Person/Phone Number:</div>
           <div style="background: white; color: black; padding: 32px 48px; border-radius: 18px; 
                       font-size: 52px; font-weight: 600; flex: 1;">
-            ${container.submitted_by}
+            ${container.submitted_by} / ${container.phone_number}
           </div>
         </div>
 
@@ -1671,6 +1672,7 @@ function App() {
   // const [submittedBy, setSubmittedBy] = useState('');
   const [container, setContainer] = useState('');
   const [containerType, setContainerType] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [hazardPairs, setHazardPairs] = useState<HazardPairData[]>([]);
   const [containers, setContainers] = useState<ContainerData[]>([]);
   // UPDATE THIS EXISTING LINE (change 'containers' to 'approvals'):
@@ -2463,8 +2465,8 @@ function App() {
   };
 
   const submitContainer = async () => {
-    if (!department.trim() || !location.trim() || !container.trim() || !containerType.trim()) {
-      alert('Please fill in all required fields (Department, Location, Container, Type)');
+    if (!department.trim() || !location.trim() || !container.trim() || !containerType.trim() || !phoneNumber.trim()) {
+      alert('Please fill in all required fields (Department, Location, Container, Type, Phone Number)');
       return;
     }
     
@@ -2492,6 +2494,7 @@ function App() {
       department,
       location,
       submitted_by: authState.user?.name || '', // Use authenticated user's name
+      phone_number: phoneNumber, // Include phone number
       container,
       container_type: containerType,
       selected_hazards: selectedHazards.map(h => h.id),
@@ -2554,6 +2557,7 @@ function App() {
     setDepartment('');
     setLocation('');
     setContainerType('');
+    setPhoneNumber(''); // Clear phone number
     setSelectedHazards([]);
     setHazardPairs([]);
     setPairStatuses({});
@@ -3115,7 +3119,18 @@ function App() {
                         Department *
                         <select
                           value={department}
-                          onChange={(e) => setDepartment(e.target.value)}
+                          onChange={async (e) => {
+                            const newDept = e.target.value;
+                            setDepartment(newDept);
+                            
+                            // Auto-regenerate container ID when department changes
+                            if (newDept) {
+                              const newId = await generateContainerID(newDept);
+                              setContainer(newId);
+                            } else {
+                              setContainer(''); // Clear if no department selected
+                            }
+                          }}
                           required
                         >
                           <option value="">Select department</option>
@@ -3197,6 +3212,38 @@ function App() {
                           display: 'block'
                         }}>
                           Automatically filled from your user profile
+                        </small>
+                      </label>
+                    </div>
+                    <div className="form-field">
+                      <label>
+                        Phone Number *
+                        <input
+                          type="tel"
+                          value={phoneNumber}
+                          onChange={(e) => setPhoneNumber(e.target.value)}
+                          placeholder="+222 XX XX XX XX"
+                          required
+                          style={{
+                            width: '100%',
+                            padding: '1rem',
+                            border: '2px solid var(--kinross-medium-gray)',
+                            borderRadius: '6px',
+                            fontSize: '1rem',
+                            transition: 'all 0.3s ease',
+                            background: 'var(--kinross-white)',
+                            boxSizing: 'border-box',
+                            minWidth: 0
+                          }}
+                        />
+                        <small style={{ 
+                          color: 'var(--kinross-dark-gray)', 
+                          fontSize: '0.85rem',
+                          fontStyle: 'italic',
+                          marginTop: '0.25rem',
+                          display: 'block'
+                        }}>
+                          Contact number for the responsible person
                         </small>
                       </label>
                     </div>
@@ -3679,6 +3726,7 @@ function App() {
                             <span><strong>Container:</strong> {container.container}</span>
                             <span><strong>Type:</strong> {container.container_type}</span>
                             <span><strong>Submitted by:</strong> {container.submitted_by}</span>
+                            <span><strong>Phone:</strong> {container.phone_number}</span> {/* ADDING PHONE NUMBER */}
                             <span><strong>Date:</strong> {new Date(container.submitted_at).toLocaleDateString()} - {new Date(container.submitted_at).toLocaleTimeString()}</span>
                             {container.approved_by && (
                               <span><strong>Approved by:</strong> {container.approved_by}</span>
@@ -3843,6 +3891,7 @@ function App() {
                             <span><strong>Location:</strong> {container.location}</span>
                             <span><strong>Container:</strong> {container.container}</span>
                             <span><strong>Submitted by:</strong> {container.submitted_by}</span>
+                            <span><strong>Phone:</strong> {container.phone_number}</span> {/* ADDING PHONE NUMBER */}
                             <span><strong>Date:</strong> {new Date(container.submitted_at).toLocaleDateString()}</span>
                           </div>
                         </div>
