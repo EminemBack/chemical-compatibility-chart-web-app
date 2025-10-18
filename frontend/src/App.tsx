@@ -58,6 +58,7 @@ interface User {
   name: string;
   role: 'hod' | 'admin' | 'user' | 'viewer';
   department: string;
+  active: boolean;
 }
 
 interface AuthState {
@@ -1673,7 +1674,7 @@ function App() {
   const [hazardPairs, setHazardPairs] = useState<HazardPairData[]>([]);
   const [containers, setContainers] = useState<ContainerData[]>([]);
   // UPDATE THIS EXISTING LINE (change 'containers' to 'approvals'):
-  const [activeTab, setActiveTab] = useState<'form' | 'containers' | 'approvals' | 'deletions' | 'admin-deletions' | 'analytics'>('form');
+  const [activeTab, setActiveTab] = useState<'form' | 'containers' | 'approvals' | 'deletions' | 'admin-deletions' | 'analytics' | 'users'>('form');
   const [loading, setLoading] = useState(false);
   const [pairStatuses, setPairStatuses] = useState<{[key: string]: any}>({});
   const [pendingContainers, setPendingContainers] = useState<ContainerData[]>([]);
@@ -1725,6 +1726,17 @@ function App() {
     type: 'approve',
     containerId: 0
   });
+
+  const [users, setUsers] = useState<User[]>([]);
+  const [showUserModal, setShowUserModal] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [userFormData, setUserFormData] = useState({
+    email: '',
+    name: '',
+    role: 'user',
+    department: '',
+    active: true
+  });  
 
   useEffect(() => {
     checkAuthStatus(); // Check auth first, don't call other functions yet
@@ -2761,6 +2773,127 @@ function App() {
     );
   };
 
+  const fetchUsers = async () => {
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(`${API_BASE}/users/`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setUsers(data);
+      }
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    }
+  };
+
+  const createUser = async () => {
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(`${API_BASE}/users/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(userFormData)
+      });
+
+      if (response.ok) {
+        alert('✅ User created successfully!');
+        setShowUserModal(false);
+        setUserFormData({ email: '', name: '', role: 'user', department: '', active: true });
+        fetchUsers();
+      } else {
+        const error = await response.json();
+        alert(`❌ Error: ${error.detail}`);
+      }
+    } catch (error) {
+      console.error('Error creating user:', error);
+      alert('❌ Error creating user');
+    }
+  };
+
+  const updateUser = async () => {
+    if (!editingUser) return;
+    
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(`${API_BASE}/users/${editingUser.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(userFormData)
+      });
+
+      if (response.ok) {
+        alert('✅ User updated successfully!');
+        setShowUserModal(false);
+        setEditingUser(null);
+        setUserFormData({ email: '', name: '', role: 'user', department: '', active: true });
+        fetchUsers();
+      } else {
+        const error = await response.json();
+        alert(`❌ Error: ${error.detail}`);
+      }
+    } catch (error) {
+      console.error('Error updating user:', error);
+      alert('❌ Error updating user');
+    }
+  };
+
+  const deleteUser = async (userId: number, userName: string) => {
+    if (!confirm(`Are you sure you want to delete user "${userName}"?`)) return;
+    
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(`${API_BASE}/users/${userId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        alert('✅ User deleted successfully!');
+        fetchUsers();
+      } else {
+        const error = await response.json();
+        alert(`❌ Error: ${error.detail}`);
+      }
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      alert('❌ Error deleting user');
+    }
+  };
+
+  const toggleUserActive = async (userId: number, currentStatus: boolean) => {
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(`${API_BASE}/users/${userId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ active: !currentStatus })
+      });
+
+      if (response.ok) {
+        alert(`✅ User ${!currentStatus ? 'activated' : 'deactivated'} successfully!`);
+        fetchUsers();
+      } else {
+        const error = await response.json();
+        alert(`❌ Error: ${error.detail}`);
+      }
+    } catch (error) {
+      console.error('Error toggling user status:', error);
+      alert('❌ Error updating user status');
+    }
+  };
+
   return (
     <div className="App">
       {/* Show loading spinner while checking auth */}
@@ -2925,6 +3058,19 @@ function App() {
                   }}
                 >
                   <span>📊 Analytics</span>
+                </button>
+              )}
+
+              {/* User Management Tab - Admin and HOD only */}
+              {authState.user && (authState.user.role === 'hod' || authState.user.role === 'admin') && (
+                <button 
+                  className={activeTab === 'users' ? 'active' : ''}
+                  onClick={() => {
+                    setActiveTab('users');
+                    fetchUsers();
+                  }}
+                >
+                  <span>👥 User Management</span>
                 </button>
               )}
             </nav>
@@ -4338,6 +4484,182 @@ function App() {
                 )}
               </div>
             )}
+            {activeTab === 'users' && authState.user && (authState.user.role === 'hod' || authState.user.role === 'admin') && (
+              <div className="containers-view">
+                <h2>👥 User Management</h2>
+                <p style={{ 
+                  textAlign: 'center', 
+                  color: 'var(--kinross-dark-gray)', 
+                  marginBottom: '2rem',
+                  fontSize: '1.1rem'
+                }}>
+                  Manage system users, roles, and permissions
+                </p>
+
+                {/* Add User Button */}
+                <div style={{ marginBottom: '2rem', textAlign: 'right' }}>
+                  <button
+                    onClick={() => {
+                      setEditingUser(null);
+                      setUserFormData({ email: '', name: '', role: 'user', department: '', active: true });
+                      setShowUserModal(true);
+                    }}
+                    style={{
+                      padding: '1rem 2rem',
+                      background: 'linear-gradient(135deg, var(--kinross-gold), var(--kinross-dark-gold))',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontWeight: '700',
+                      fontSize: '1rem',
+                      boxShadow: '0 4px 15px rgba(212, 165, 83, 0.3)'
+                    }}
+                  >
+                    ➕ Add New User
+                  </button>
+                </div>
+
+                {/* Users Table */}
+                <div style={{
+                  background: 'var(--kinross-white)',
+                  borderRadius: '12px',
+                  overflow: 'hidden',
+                  boxShadow: '0 4px 15px rgba(30, 58, 95, 0.1)',
+                  border: '1px solid var(--kinross-medium-gray)'
+                }}>
+                  <table style={{
+                    width: '100%',
+                    borderCollapse: 'collapse'
+                  }}>
+                    <thead>
+                      <tr style={{
+                        background: 'linear-gradient(135deg, var(--kinross-navy), var(--kinross-dark-navy))',
+                        color: 'white'
+                      }}>
+                        <th style={{ padding: '1rem', textAlign: 'left' }}>Name</th>
+                        <th style={{ padding: '1rem', textAlign: 'left' }}>Email</th>
+                        <th style={{ padding: '1rem', textAlign: 'left' }}>Role</th>
+                        <th style={{ padding: '1rem', textAlign: 'left' }}>Department</th>
+                        <th style={{ padding: '1rem', textAlign: 'center' }}>Status</th>
+                        <th style={{ padding: '1rem', textAlign: 'center' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {users.map((user, idx) => (
+                        <tr key={user.id} style={{
+                          background: idx % 2 === 0 ? 'white' : 'var(--kinross-light-gray)',
+                          borderBottom: '1px solid var(--kinross-medium-gray)'
+                        }}>
+                          <td style={{ padding: '1rem' }}>
+                            <strong>{user.name}</strong>
+                          </td>
+                          <td style={{ padding: '1rem', fontSize: '0.9rem' }}>
+                            {user.email}
+                          </td>
+                          <td style={{ padding: '1rem' }}>
+                            <span style={{
+                              padding: '0.25rem 0.75rem',
+                              borderRadius: '15px',
+                              fontSize: '0.85rem',
+                              fontWeight: '600',
+                              background: user.role === 'hod' ? '#E3F2FD' : user.role === 'admin' ? '#FFF3E0' : '#E8F5E8',
+                              color: user.role === 'hod' ? '#1565C0' : user.role === 'admin' ? '#E65100' : '#2E7D32'
+                            }}>
+                              {user.role.toUpperCase()}
+                            </span>
+                          </td>
+                          <td style={{ padding: '1rem', fontSize: '0.9rem' }}>
+                            {user.department}
+                          </td>
+                          <td style={{ padding: '1rem', textAlign: 'center' }}>
+                            <span style={{
+                              padding: '0.25rem 0.75rem',
+                              borderRadius: '15px',
+                              fontSize: '0.85rem',
+                              fontWeight: '600',
+                              background: user.active ? '#E8F5E8' : '#FFEBEE',
+                              color: user.active ? '#2E7D32' : '#C62828'
+                            }}>
+                              {user.active ? '✓ Active' : '✗ Inactive'}
+                            </span>
+                          </td>
+                          <td style={{ padding: '1rem', textAlign: 'center' }}>
+                            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+                              <button
+                              onClick={() => {
+                                setEditingUser(user);
+                                setUserFormData({
+                                  email: user.email,
+                                  name: user.name,
+                                  role: user.role,
+                                  department: user.department,
+                                  active: user.active
+                                });
+                                setShowUserModal(true);
+                              }}
+                              style={{
+                                padding: '0.5rem 1rem',
+                                background: '#2196F3',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontSize: '0.85rem',
+                                fontWeight: '600'
+                              }}
+                            >
+                              ✏️ Edit
+                            </button>
+                            <button
+                              onClick={() => toggleUserActive(user.id, user.active)}
+                              disabled={user.id === authState.user?.id}
+                              style={{
+                                padding: '0.5rem 1rem',
+                                background: user.active ? '#FF9800' : '#4CAF50',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: user.id === authState.user?.id ? 'not-allowed' : 'pointer',
+                                fontSize: '0.85rem',
+                                fontWeight: '600',
+                                opacity: user.id === authState.user?.id ? 0.5 : 1
+                              }}
+                            >
+                              {user.active ? '🔒 Deactivate' : '🔓 Activate'}
+                            </button>
+                            <button
+                              onClick={() => deleteUser(user.id, user.name)}
+                              disabled={user.id === authState.user?.id}
+                              style={{
+                                padding: '0.5rem 1rem',
+                                background: '#F44336',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: user.id === authState.user?.id ? 'not-allowed' : 'pointer',
+                                fontSize: '0.85rem',
+                                fontWeight: '600',
+                                opacity: user.id === authState.user?.id ? 0.5 : 1
+                              }}
+                            >
+                              🗑️ Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                {users.length === 0 && (
+                  <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--kinross-dark-gray)' }}>
+                    No users found
+                  </div>
+                )}
+              </div>
+            </div>
+            )}
           </main>
 
           <footer className="kinross-footer">
@@ -4400,7 +4722,181 @@ function App() {
                 ? containers.find(c => c.id === selectedContainerForDeletion)?.container || ''
                 : ''
             }
-          />          
+          />
+
+          {/* User Management Modal */}
+          {showUserModal && (
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(30, 58, 95, 0.8)',
+              backdropFilter: 'blur(5px)',
+              zIndex: 1000,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '2rem'
+            }} onClick={() => setShowUserModal(false)}>
+              <div style={{
+                background: 'white',
+                borderRadius: '12px',
+                padding: '2rem',
+                maxWidth: '600px',
+                width: '100%',
+                boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+              }} onClick={(e) => e.stopPropagation()}>
+                <h3 style={{ margin: '0 0 1.5rem 0', color: 'var(--kinross-navy)' }}>
+                  {editingUser ? '✏️ Edit User' : '➕ Add New User'}
+                </h3>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600' }}>
+                      Email *
+                      <input
+                        type="email"
+                        value={userFormData.email}
+                        onChange={(e) => setUserFormData({...userFormData, email: e.target.value})}
+                        style={{
+                          width: '100%',
+                          padding: '0.75rem',
+                          border: '2px solid var(--kinross-medium-gray)',
+                          borderRadius: '6px',
+                          fontSize: '1rem',
+                          marginTop: '0.25rem',
+                          boxSizing: 'border-box'
+                        }}
+                        placeholder="user@kinross.com"
+                      />
+                    </label>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600' }}>
+                      Full Name *
+                      <input
+                        type="text"
+                        value={userFormData.name}
+                        onChange={(e) => setUserFormData({...userFormData, name: e.target.value})}
+                        style={{
+                          width: '100%',
+                          padding: '0.75rem',
+                          border: '2px solid var(--kinross-medium-gray)',
+                          borderRadius: '6px',
+                          fontSize: '1rem',
+                          marginTop: '0.25rem',
+                          boxSizing: 'border-box'
+                        }}
+                        placeholder="John Doe"
+                      />
+                    </label>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600' }}>
+                      Role *
+                      <select
+                        value={userFormData.role}
+                        onChange={(e) => setUserFormData({...userFormData, role: e.target.value})}
+                        style={{
+                          width: '100%',
+                          padding: '0.75rem',
+                          border: '2px solid var(--kinross-medium-gray)',
+                          borderRadius: '6px',
+                          fontSize: '1rem',
+                          marginTop: '0.25rem',
+                          boxSizing: 'border-box'
+                        }}
+                      >
+                        <option value="user">User</option>
+                        <option value="admin">Admin</option>
+                        <option value="hod">HOD</option>
+                        <option value="viewer">Viewer</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600' }}>
+                      Department *
+                      <select
+                        value={userFormData.department}
+                        onChange={(e) => setUserFormData({...userFormData, department: e.target.value})}
+                        style={{
+                          width: '100%',
+                          padding: '0.75rem',
+                          border: '2px solid var(--kinross-medium-gray)',
+                          borderRadius: '6px',
+                          fontSize: '1rem',
+                          marginTop: '0.25rem',
+                          boxSizing: 'border-box'
+                        }}
+                      >
+                        <option value="">Select department</option>
+                        {DEPARTMENTS.map(dept => (
+                          <option key={dept} value={dept}>{dept}</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+
+                  {editingUser && (
+                    <div>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: '600' }}>
+                        <input
+                          type="checkbox"
+                          checked={userFormData.active}
+                          onChange={(e) => setUserFormData({...userFormData, active: e.target.checked})}
+                          style={{ width: '20px', height: '20px' }}
+                        />
+                        Active User
+                      </label>
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem', justifyContent: 'flex-end' }}>
+                  <button
+                    onClick={() => {
+                      setShowUserModal(false);
+                      setEditingUser(null);
+                      setUserFormData({ email: '', name: '', role: 'user', department: '', active: true });
+                    }}
+                    style={{
+                      padding: '0.75rem 1.5rem',
+                      background: 'transparent',
+                      color: '#666',
+                      border: '2px solid #ccc',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontWeight: '600'
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={editingUser ? updateUser : createUser}
+                    disabled={!userFormData.email || !userFormData.name || !userFormData.department}
+                    style={{
+                      padding: '0.75rem 1.5rem',
+                      background: 'var(--kinross-gold)',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: !userFormData.email || !userFormData.name || !userFormData.department ? 'not-allowed' : 'pointer',
+                      fontWeight: '600',
+                      opacity: !userFormData.email || !userFormData.name || !userFormData.department ? 0.5 : 1
+                    }}
+                  >
+                    {editingUser ? '💾 Update User' : '➕ Create User'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
 

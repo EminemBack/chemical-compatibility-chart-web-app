@@ -1835,6 +1835,187 @@ async def get_analytics_dashboard(authorization: str = Header(None)):
         logger.error("Error fetching analytics data", error=str(e))
         raise HTTPException(status_code=500, detail=f"Error fetching analytics data: {str(e)}")
 
+# User Management Endpoints
+@app.get("/users/")
+async def get_all_users(authorization: str = Header(None)):
+    """Get all users - Admin and HOD only"""
+    try:
+        current_user = await get_current_user_from_token(authorization)
+        
+        if current_user['role'] not in ['admin', 'hod']:
+            raise HTTPException(status_code=403, detail="Admin or HOD access required")
+        
+        users = await execute_query("""
+            SELECT id, email, name, role, department, active, created_at, updated_at
+            FROM users
+            ORDER BY created_at DESC
+        """)
+        
+        return [dict(user) for user in users]
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error fetching users", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/users/")
+async def create_user(
+    email: str,
+    name: str,
+    role: str,
+    department: str,
+    authorization: str = Header(None)
+):
+    """Create new user - Admin and HOD only"""
+    try:
+        current_user = await get_current_user_from_token(authorization)
+        
+        if current_user['role'] not in ['admin', 'hod']:
+            raise HTTPException(status_code=403, detail="Admin or HOD access required")
+        
+        # Validate role
+        if role not in ['hod', 'admin', 'user', 'viewer']:
+            raise HTTPException(status_code=400, detail="Invalid role")
+        
+        # Check if user already exists
+        existing_user = await execute_single(
+            "SELECT id FROM users WHERE email = $1", 
+            email.lower().strip()
+        )
+        
+        if existing_user:
+            raise HTTPException(status_code=400, detail="User with this email already exists")
+        
+        # Create user
+        user_id = await execute_value("""
+            INSERT INTO users (email, name, role, department, active)
+            VALUES ($1, $2, $3, $4, true)
+            RETURNING id
+        """, email.lower().strip(), name, role, department)
+        
+        logger.info("User created", user_id=user_id, created_by=current_user['name'])
+        
+        return {
+            "message": "User created successfully",
+            "user_id": user_id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error creating user", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/users/{user_id}")
+async def update_user(
+    user_id: int,
+    email: str = None,
+    name: str = None,
+    role: str = None,
+    department: str = None,
+    active: bool = None,
+    authorization: str = Header(None)
+):
+    """Update user - Admin and HOD only"""
+    try:
+        current_user = await get_current_user_from_token(authorization)
+        
+        if current_user['role'] not in ['admin', 'hod']:
+            raise HTTPException(status_code=403, detail="Admin or HOD access required")
+        
+        # Get existing user
+        user = await execute_single("SELECT * FROM users WHERE id = $1", user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Validate role if provided
+        if role and role not in ['hod', 'admin', 'user', 'viewer']:
+            raise HTTPException(status_code=400, detail="Invalid role")
+        
+        # Build update query
+        updates = []
+        params = []
+        param_count = 1
+        
+        if email is not None:
+            updates.append(f"email = ${param_count}")
+            params.append(email.lower().strip())
+            param_count += 1
+        
+        if name is not None:
+            updates.append(f"name = ${param_count}")
+            params.append(name)
+            param_count += 1
+        
+        if role is not None:
+            updates.append(f"role = ${param_count}")
+            params.append(role)
+            param_count += 1
+        
+        if department is not None:
+            updates.append(f"department = ${param_count}")
+            params.append(department)
+            param_count += 1
+        
+        if active is not None:
+            updates.append(f"active = ${param_count}")
+            params.append(active)
+            param_count += 1
+        
+        updates.append(f"updated_at = ${param_count}")
+        params.append(datetime.utcnow())
+        param_count += 1
+        
+        if not updates:
+            raise HTTPException(status_code=400, detail="No updates provided")
+        
+        params.append(user_id)
+        query = f"UPDATE users SET {', '.join(updates)} WHERE id = ${param_count}"
+        
+        await execute_command(query, *params)
+        
+        logger.info("User updated", user_id=user_id, updated_by=current_user['name'])
+        
+        return {"message": "User updated successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error updating user", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/users/{user_id}")
+async def delete_user(user_id: int, authorization: str = Header(None)):
+    """Delete user - Admin and HOD only"""
+    try:
+        current_user = await get_current_user_from_token(authorization)
+        
+        if current_user['role'] not in ['admin', 'hod']:
+            raise HTTPException(status_code=403, detail="Admin or HOD access required")
+        
+        # Check if user exists
+        user = await execute_single("SELECT * FROM users WHERE id = $1", user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Prevent deleting yourself
+        if user_id == current_user['id']:
+            raise HTTPException(status_code=400, detail="Cannot delete your own account")
+        
+        # Delete user
+        await execute_command("DELETE FROM users WHERE id = $1", user_id)
+        
+        logger.info("User deleted", user_id=user_id, deleted_by=current_user['name'])
+        
+        return {"message": "User deleted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error deleting user", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
 # API Health Check
 @app.get("/health")
 async def health_check():
