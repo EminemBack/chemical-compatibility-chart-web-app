@@ -1425,7 +1425,7 @@ const generateContainerPDF = async (container: ContainerData, hazardCategories: 
           <div style="font-size: 60px; font-weight: bold; white-space: nowrap;">Responsible Person/Phone Number:</div>
           <div style="background: white; color: black; padding: 32px 48px; border-radius: 18px; 
                       font-size: 52px; font-weight: 600; flex: 1;">
-            ${container.submitted_by} / ${container.phone_number}
+            ${container.submitted_by}  /  ${container.phone_number}
           </div>
         </div>
 
