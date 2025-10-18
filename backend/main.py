@@ -1861,10 +1861,10 @@ async def get_all_users(authorization: str = Header(None)):
 
 @app.post("/users/")
 async def create_user(
-    email: str,
-    name: str,
-    role: str,
-    department: str,
+    email: Optional[str] = None,
+    name: Optional[str] = None,
+    role: Optional[str] = None,
+    department: Optional[str] = None,
     authorization: str = Header(None)
 ):
     """Create new user - Admin and HOD only"""

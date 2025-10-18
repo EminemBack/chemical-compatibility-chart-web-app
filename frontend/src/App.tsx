@@ -2792,13 +2792,25 @@ function App() {
   const createUser = async () => {
     try {
       const token = localStorage.getItem('access_token');
-      const response = await fetch(`${API_BASE}/users/`, {
+      
+      // Validate required fields
+      if (!userFormData.email || !userFormData.name || !userFormData.department) {
+        alert('❌ Please fill in all required fields');
+        return;
+      }
+      
+      // Build query parameters
+      const params = new URLSearchParams();
+      params.append('email', userFormData.email);
+      params.append('name', userFormData.name);
+      params.append('role', userFormData.role);
+      params.append('department', userFormData.department);
+      
+      const response = await fetch(`${API_BASE}/users/?${params.toString()}`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(userFormData)
+        }
       });
 
       if (response.ok) {
@@ -2879,13 +2891,16 @@ function App() {
   const toggleUserActive = async (userId: number, currentStatus: boolean) => {
     try {
       const token = localStorage.getItem('access_token');
-      const response = await fetch(`${API_BASE}/users/${userId}`, {
+      
+      // Use query parameter for active status
+      const params = new URLSearchParams();
+      params.append('active', String(!currentStatus));
+      
+      const response = await fetch(`${API_BASE}/users/${userId}?${params.toString()}`, {
         method: 'PUT',
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ active: !currentStatus })
+        }
       });
 
       if (response.ok) {
