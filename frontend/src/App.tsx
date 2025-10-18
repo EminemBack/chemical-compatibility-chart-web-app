@@ -2821,13 +2821,20 @@ function App() {
     
     try {
       const token = localStorage.getItem('access_token');
-      const response = await fetch(`${API_BASE}/users/${editingUser.id}`, {
+      
+      // Build query parameters for fields that have values
+      const params = new URLSearchParams();
+      if (userFormData.email) params.append('email', userFormData.email);
+      if (userFormData.name) params.append('name', userFormData.name);
+      if (userFormData.role) params.append('role', userFormData.role);
+      if (userFormData.department) params.append('department', userFormData.department);
+      params.append('active', String(userFormData.active));
+      
+      const response = await fetch(`${API_BASE}/users/${editingUser.id}?${params.toString()}`, {
         method: 'PUT',
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(userFormData)
+        }
       });
 
       if (response.ok) {

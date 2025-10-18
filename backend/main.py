@@ -1910,11 +1910,11 @@ async def create_user(
 @app.put("/users/{user_id}")
 async def update_user(
     user_id: int,
-    email: str = None,
-    name: str = None,
-    role: str = None,
-    department: str = None,
-    active: bool = None,
+    email: Optional[str] = None,
+    name: Optional[str] = None,
+    role: Optional[str] = None,
+    department: Optional[str] = None,
+    active: Optional[bool] = None,
     authorization: str = Header(None)
 ):
     """Update user - Admin and HOD only"""
@@ -1933,7 +1933,7 @@ async def update_user(
         if role and role not in ['hod', 'admin', 'user', 'viewer']:
             raise HTTPException(status_code=400, detail="Invalid role")
         
-        # Build update query
+        # Build update query dynamically
         updates = []
         params = []
         param_count = 1
@@ -1963,14 +1963,18 @@ async def update_user(
             params.append(active)
             param_count += 1
         
+        if not updates:
+            raise HTTPException(status_code=400, detail="No updates provided")
+        
+        # Always update timestamp
         updates.append(f"updated_at = ${param_count}")
         params.append(datetime.utcnow())
         param_count += 1
         
-        if not updates:
-            raise HTTPException(status_code=400, detail="No updates provided")
-        
+        # Add user_id as last parameter
         params.append(user_id)
+        
+        # Build final query
         query = f"UPDATE users SET {', '.join(updates)} WHERE id = ${param_count}"
         
         await execute_command(query, *params)
