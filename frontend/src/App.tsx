@@ -123,6 +123,7 @@ const DEPARTMENTS = [
 
 // ADD THIS NEW MAPPING
 const DEPARTMENT_ABBREV: { [key: string]: string } = {
+  'General Management': 'GM',
   'Environment': 'ENV',
   'Project': 'PRO',
   'External Relations': 'ER',
