@@ -1453,7 +1453,7 @@ const generateContainerPDF = async (container: ContainerData, hazardCategories: 
                     <div style="width: 115px; height: 115px; border: 6px solid #333; 
                                 background: white; margin: 0 auto; display: flex; 
                                 align-items: center; justify-content: center; border-radius: 12px;">
-                      ${isSelected ? '<span style="font-size: 85px; color: #4CAF50; font-weight: bold; line-height: 1;">✓</span>' : ''}
+                      ${isSelected ? '<span style="font-size: 85px; color: #4CAF50; font-weight: 900; line-height: 1; -webkit-text-stroke: 2px #2E7D32;">✓</span>' : ''}
                     </div>
                   </div>
                 `;
