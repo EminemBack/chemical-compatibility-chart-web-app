@@ -60,6 +60,7 @@ interface User {
   role: 'hod' | 'admin' | 'user' | 'viewer';
   department: string;
   active: boolean;
+  created_at: string;
 }
 
 interface AuthState {
@@ -105,6 +106,7 @@ const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
 // ADD THESE CONSTANTS HERE:
 // Predefined department list
 const DEPARTMENTS = [
+  'General Management',
   'Environment',
   'Project',
   'External Relations',
@@ -1740,6 +1742,19 @@ function App() {
     active: true
   });  
 
+  // NEW STATES FOR USER PAGINATION AND SORTING:
+  const [usersPagination, setUsersPagination] = useState({
+    currentPage: 1,
+    itemsPerPage: 10
+  });
+  const [usersSortConfig, setUsersSortConfig] = useState<{
+    key: 'name' | 'email' | 'role' | 'department' | 'created_at';
+    direction: 'asc' | 'desc';
+  }>({
+    key: 'name',
+    direction: 'asc'
+  });
+
   useEffect(() => {
     checkAuthStatus(); // Check auth first, don't call other functions yet
     fetchHazardCategories(); // This can be called immediately since it doesn't require auth
@@ -2791,6 +2806,60 @@ function App() {
     } catch (error) {
       console.error('Error fetching users:', error);
     }
+  };
+
+  // Sort users based on current sort config
+  const getSortedUsers = () => {
+    const sortedUsers = [...users].sort((a, b) => {
+      const aValue = a[usersSortConfig.key];
+      const bValue = b[usersSortConfig.key];
+      
+      if (aValue === null || aValue === undefined) return 1;
+      if (bValue === null || bValue === undefined) return -1;
+      
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        return usersSortConfig.direction === 'asc' 
+          ? aValue.localeCompare(bValue)
+          : bValue.localeCompare(aValue);
+      }
+      
+      if (aValue < bValue) return usersSortConfig.direction === 'asc' ? -1 : 1;
+      if (aValue > bValue) return usersSortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+    
+    return sortedUsers;
+  };
+
+  // Get paginated users
+  const getPaginatedUsers = () => {
+    const sortedUsers = getSortedUsers();
+    const startIndex = (usersPagination.currentPage - 1) * usersPagination.itemsPerPage;
+    const endIndex = startIndex + usersPagination.itemsPerPage;
+    return sortedUsers.slice(startIndex, endIndex);
+  };
+
+  // Calculate total pages
+  const getTotalPages = () => {
+    return Math.ceil(users.length / usersPagination.itemsPerPage);
+  };
+
+  // Handle sort column click
+  const handleSortColumn = (key: 'name' | 'email' | 'role' | 'department' | 'created_at') => {
+    setUsersSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
+  // Handle page change
+  const handlePageChange = (page: number) => {
+    setUsersPagination(prev => ({ ...prev, currentPage: page }));
+  };
+
+  // Handle items per page change
+  const handleItemsPerPageChange = (itemsPerPage: number) => {
+    setUsersPagination({ currentPage: 1, itemsPerPage });
   };
 
   const createUser = async () => {
@@ -4567,8 +4636,15 @@ function App() {
                   Manage system users, roles, and permissions
                 </p>
 
-                {/* Add User Button */}
-                <div style={{ marginBottom: '2rem', textAlign: 'right' }}>
+                {/* Top Controls: Add User Button + Pagination Controls */}
+                <div style={{ 
+                  marginBottom: '2rem', 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center',
+                  gap: '1rem',
+                  flexWrap: 'wrap'
+                }}>
                   <button
                     onClick={() => {
                       setEditingUser(null);
@@ -4589,6 +4665,36 @@ function App() {
                   >
                     ➕ Add New User
                   </button>
+
+                  {/* ✅ PAGINATION CONTROLS */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: '600' }}>
+                      Show:
+                      <select
+                        value={usersPagination.itemsPerPage}
+                        onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
+                        style={{
+                          padding: '0.5rem',
+                          border: '2px solid var(--kinross-medium-gray)',
+                          borderRadius: '6px',
+                          fontSize: '0.95rem',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <option value={5}>5</option>
+                        <option value={10}>10</option>
+                        <option value={25}>25</option>
+                        <option value={50}>50</option>
+                        <option value={100}>100</option>
+                      </select>
+                      per page
+                    </label>
+                    
+                    <span style={{ color: 'var(--kinross-dark-gray)', fontSize: '0.95rem' }}>
+                      Showing {((usersPagination.currentPage - 1) * usersPagination.itemsPerPage) + 1} to{' '}
+                      {Math.min(usersPagination.currentPage * usersPagination.itemsPerPage, users.length)} of {users.length} users
+                    </span>
+                  </div>
                 </div>
 
                 {/* Users Table */}
@@ -4597,7 +4703,8 @@ function App() {
                   borderRadius: '12px',
                   overflow: 'hidden',
                   boxShadow: '0 4px 15px rgba(30, 58, 95, 0.1)',
-                  border: '1px solid var(--kinross-medium-gray)'
+                  border: '1px solid var(--kinross-medium-gray)',
+                  marginBottom: '2rem'
                 }}>
                   <table style={{
                     width: '100%',
@@ -4608,16 +4715,75 @@ function App() {
                         background: 'linear-gradient(135deg, var(--kinross-navy), var(--kinross-dark-navy))',
                         color: 'white'
                       }}>
-                        <th style={{ padding: '1rem', textAlign: 'left' }}>Name</th>
-                        <th style={{ padding: '1rem', textAlign: 'left' }}>Email</th>
-                        <th style={{ padding: '1rem', textAlign: 'left' }}>Role</th>
-                        <th style={{ padding: '1rem', textAlign: 'left' }}>Department</th>
+                        {/* ✅ SORTABLE HEADERS */}
+                        <th 
+                          onClick={() => handleSortColumn('name')}
+                          style={{ 
+                            padding: '1rem', 
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                            userSelect: 'none',
+                            position: 'relative'
+                          }}
+                        >
+                          Name {usersSortConfig.key === 'name' && (
+                            <span style={{ marginLeft: '0.5rem' }}>
+                              {usersSortConfig.direction === 'asc' ? '↑' : '↓'}
+                            </span>
+                          )}
+                        </th>
+                        <th 
+                          onClick={() => handleSortColumn('email')}
+                          style={{ 
+                            padding: '1rem', 
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                            userSelect: 'none'
+                          }}
+                        >
+                          Email {usersSortConfig.key === 'email' && (
+                            <span style={{ marginLeft: '0.5rem' }}>
+                              {usersSortConfig.direction === 'asc' ? '↑' : '↓'}
+                            </span>
+                          )}
+                        </th>
+                        <th 
+                          onClick={() => handleSortColumn('role')}
+                          style={{ 
+                            padding: '1rem', 
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                            userSelect: 'none'
+                          }}
+                        >
+                          Role {usersSortConfig.key === 'role' && (
+                            <span style={{ marginLeft: '0.5rem' }}>
+                              {usersSortConfig.direction === 'asc' ? '↑' : '↓'}
+                            </span>
+                          )}
+                        </th>
+                        <th 
+                          onClick={() => handleSortColumn('department')}
+                          style={{ 
+                            padding: '1rem', 
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                            userSelect: 'none'
+                          }}
+                        >
+                          Department {usersSortConfig.key === 'department' && (
+                            <span style={{ marginLeft: '0.5rem' }}>
+                              {usersSortConfig.direction === 'asc' ? '↑' : '↓'}
+                            </span>
+                          )}
+                        </th>
                         <th style={{ padding: '1rem', textAlign: 'center' }}>Status</th>
                         <th style={{ padding: '1rem', textAlign: 'center' }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {users.map((user, idx) => (
+                      {/* ✅ USE PAGINATED USERS */}
+                      {getPaginatedUsers().map((user, idx) => (
                         <tr key={user.id} style={{
                           background: idx % 2 === 0 ? 'white' : 'var(--kinross-light-gray)',
                           borderBottom: '1px solid var(--kinross-medium-gray)'
@@ -4658,78 +4824,171 @@ function App() {
                           <td style={{ padding: '1rem', textAlign: 'center' }}>
                             <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', flexWrap: 'wrap' }}>
                               <button
-                              onClick={() => {
-                                setEditingUser(user);
-                                setUserFormData({
-                                  email: user.email,
-                                  name: user.name,
-                                  role: user.role,
-                                  department: user.department,
-                                  active: user.active
-                                });
-                                setShowUserModal(true);
-                              }}
-                              style={{
-                                padding: '0.5rem 1rem',
-                                background: '#2196F3',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '4px',
-                                cursor: 'pointer',
-                                fontSize: '0.85rem',
-                                fontWeight: '600'
-                              }}
-                            >
-                              ✏️ Edit
-                            </button>
-                            <button
-                              onClick={() => toggleUserActive(user.id, user.active)}
-                              disabled={user.id === authState.user?.id}
-                              style={{
-                                padding: '0.5rem 1rem',
-                                background: user.active ? '#FF9800' : '#4CAF50',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '4px',
-                                cursor: user.id === authState.user?.id ? 'not-allowed' : 'pointer',
-                                fontSize: '0.85rem',
-                                fontWeight: '600',
-                                opacity: user.id === authState.user?.id ? 0.5 : 1
-                              }}
-                            >
-                              {user.active ? '🔒 Deactivate' : '🔓 Activate'}
-                            </button>
-                            <button
-                              onClick={() => deleteUser(user.id, user.name)}
-                              disabled={user.id === authState.user?.id}
-                              style={{
-                                padding: '0.5rem 1rem',
-                                background: '#F44336',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '4px',
-                                cursor: user.id === authState.user?.id ? 'not-allowed' : 'pointer',
-                                fontSize: '0.85rem',
-                                fontWeight: '600',
-                                opacity: user.id === authState.user?.id ? 0.5 : 1
-                              }}
-                            >
-                              🗑️ Delete
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                                onClick={() => {
+                                  setEditingUser(user);
+                                  setUserFormData({
+                                    email: user.email,
+                                    name: user.name,
+                                    role: user.role,
+                                    department: user.department,
+                                    active: user.active
+                                  });
+                                  setShowUserModal(true);
+                                }}
+                                style={{
+                                  padding: '0.5rem 1rem',
+                                  background: '#2196F3',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer',
+                                  fontSize: '0.85rem',
+                                  fontWeight: '600'
+                                }}
+                              >
+                                ✏️ Edit
+                              </button>
+                              <button
+                                onClick={() => toggleUserActive(user.id, user.active)}
+                                disabled={user.id === authState.user?.id}
+                                style={{
+                                  padding: '0.5rem 1rem',
+                                  background: user.active ? '#FF9800' : '#4CAF50',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  cursor: user.id === authState.user?.id ? 'not-allowed' : 'pointer',
+                                  fontSize: '0.85rem',
+                                  fontWeight: '600',
+                                  opacity: user.id === authState.user?.id ? 0.5 : 1
+                                }}
+                              >
+                                {user.active ? '🔒 Deactivate' : '🔓 Activate'}
+                              </button>
+                              <button
+                                onClick={() => deleteUser(user.id, user.name)}
+                                disabled={user.id === authState.user?.id}
+                                style={{
+                                  padding: '0.5rem 1rem',
+                                  background: '#F44336',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  cursor: user.id === authState.user?.id ? 'not-allowed' : 'pointer',
+                                  fontSize: '0.85rem',
+                                  fontWeight: '600',
+                                  opacity: user.id === authState.user?.id ? 0.5 : 1
+                                }}
+                              >
+                                🗑️ Delete
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
 
-                {users.length === 0 && (
-                  <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--kinross-dark-gray)' }}>
-                    No users found
+                  {users.length === 0 && (
+                    <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--kinross-dark-gray)' }}>
+                      No users found
+                    </div>
+                  )}
+                </div>
+
+                {/* ✅ PAGINATION CONTROLS (BOTTOM) */}
+                {users.length > 0 && getTotalPages() > 1 && (
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    marginTop: '2rem'
+                  }}>
+                    <button
+                      onClick={() => handlePageChange(1)}
+                      disabled={usersPagination.currentPage === 1}
+                      style={{
+                        padding: '0.5rem 1rem',
+                        background: usersPagination.currentPage === 1 ? '#ccc' : 'var(--kinross-navy)',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: usersPagination.currentPage === 1 ? 'not-allowed' : 'pointer',
+                        fontWeight: '600'
+                      }}
+                    >
+                      ««
+                    </button>
+                    <button
+                      onClick={() => handlePageChange(usersPagination.currentPage - 1)}
+                      disabled={usersPagination.currentPage === 1}
+                      style={{
+                        padding: '0.5rem 1rem',
+                        background: usersPagination.currentPage === 1 ? '#ccc' : 'var(--kinross-navy)',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: usersPagination.currentPage === 1 ? 'not-allowed' : 'pointer',
+                        fontWeight: '600'
+                      }}
+                    >
+                      «
+                    </button>
+                    
+                    {/* Page Numbers */}
+                    {Array.from({ length: getTotalPages() }, (_, i) => i + 1).map(page => (
+                      <button
+                        key={page}
+                        onClick={() => handlePageChange(page)}
+                        style={{
+                          padding: '0.5rem 1rem',
+                          background: usersPagination.currentPage === page ? 'var(--kinross-gold)' : 'var(--kinross-navy)',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontWeight: '600',
+                          minWidth: '40px'
+                        }}
+                      >
+                        {page}
+                      </button>
+                    ))}
+                    
+                    <button
+                      onClick={() => handlePageChange(usersPagination.currentPage + 1)}
+                      disabled={usersPagination.currentPage === getTotalPages()}
+                      style={{
+                        padding: '0.5rem 1rem',
+                        background: usersPagination.currentPage === getTotalPages() ? '#ccc' : 'var(--kinross-navy)',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: usersPagination.currentPage === getTotalPages() ? 'not-allowed' : 'pointer',
+                        fontWeight: '600'
+                      }}
+                    >
+                      »
+                    </button>
+                    <button
+                      onClick={() => handlePageChange(getTotalPages())}
+                      disabled={usersPagination.currentPage === getTotalPages()}
+                      style={{
+                        padding: '0.5rem 1rem',
+                        background: usersPagination.currentPage === getTotalPages() ? '#ccc' : 'var(--kinross-navy)',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: usersPagination.currentPage === getTotalPages() ? 'not-allowed' : 'pointer',
+                        fontWeight: '600'
+                      }}
+                    >
+                      »»
+                    </button>
                   </div>
                 )}
               </div>
-            </div>
             )}
           </main>
 
