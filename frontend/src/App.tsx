@@ -118,7 +118,8 @@ const DEPARTMENTS = [
   'Finance',
   'Mobile Maintenance',
   'Support Services',
-  'Technical Services'
+  'Technical Services',
+  'Security',
 ];
 
 // ADD THIS NEW MAPPING
@@ -135,7 +136,8 @@ const DEPARTMENT_ABBREV: { [key: string]: string } = {
   'Finance': 'FIN',
   'Mobile Maintenance': 'MEM',
   'Support Services': 'SS',
-  'Technical Services': 'TSE'
+  'Technical Services': 'TSE',
+  'Security': 'SEC',
 };
 
 // Function to generate container ID
