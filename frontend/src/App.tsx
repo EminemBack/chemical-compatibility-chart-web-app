@@ -4795,7 +4795,7 @@ function App() {
                           borderBottom: '1px solid var(--kinross-medium-gray)'
                         }}>
                           {/* ACTIONS COLUMN - NOW FIRST */}
-                          <td style={{ padding: '1rem', textAlign: 'center' }}>
+                          <td style={{ padding: '1rem', textAlign: 'center', position: 'relative', overflow: 'visible' }}>
                             <div className="user-actions-dropdown">
                               <button className="user-actions-trigger" title="User Actions">
                                 ✏️
