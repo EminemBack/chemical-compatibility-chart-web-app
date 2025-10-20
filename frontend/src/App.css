@@ -2346,3 +2346,105 @@ textarea {
     opacity: 1;
   }
 }
+
+/* User Management Actions Dropdown */
+.user-actions-dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.user-actions-trigger {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--kinross-gold);
+  color: white;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  transition: all 0.3s ease;
+}
+
+.user-actions-trigger:hover {
+  background: var(--kinross-dark-gold);
+  transform: scale(1.1);
+}
+
+.user-actions-menu {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 0.5rem;
+  background: white;
+  border: 2px solid var(--kinross-gold);
+  border-radius: 8px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+  min-width: 180px;
+  z-index: 9999;  /* INCREASED from 1000 to 9999 */
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s ease;
+  pointer-events: none;  /* ADD THIS - prevents blocking hover */
+}
+
+.user-actions-dropdown:hover .user-actions-menu {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;  /* ADD THIS - enables clicking when visible */
+}
+
+.user-actions-menu button {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: transparent;
+  color: var(--kinross-navy);
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 0;
+}
+
+.user-actions-menu button:first-child {
+  border-top-left-radius: 6px;
+  border-top-right-radius: 6px;
+}
+
+.user-actions-menu button:last-child {
+  border-bottom-left-radius: 6px;
+  border-bottom-right-radius: 6px;
+}
+
+.user-actions-menu button:hover:not(:disabled) {
+  background: var(--kinross-light-gray);
+  color: var(--kinross-gold);
+}
+
+.user-actions-menu button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.user-actions-menu button.edit-action:hover:not(:disabled) {
+  background: #E3F2FD;
+  color: #2196F3;
+}
+
+.user-actions-menu button.toggle-action:hover:not(:disabled) {
+  background: #FFF3E0;
+  color: #FF9800;
+}
+
+.user-actions-menu button.delete-action:hover:not(:disabled) {
+  background: #FFEBEE;
+  color: #F44336;
+}

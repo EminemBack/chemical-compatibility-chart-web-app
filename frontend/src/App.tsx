@@ -4704,14 +4704,15 @@ function App() {
                 <div style={{
                   background: 'var(--kinross-white)',
                   borderRadius: '12px',
-                  overflow: 'hidden',
+                  overflow: 'visible',  /* CHANGED from 'hidden' to 'visible' */
                   boxShadow: '0 4px 15px rgba(30, 58, 95, 0.1)',
                   border: '1px solid var(--kinross-medium-gray)',
                   marginBottom: '2rem'
                 }}>
                   <table style={{
                     width: '100%',
-                    borderCollapse: 'collapse'
+                    borderCollapse: 'collapse',
+                    overflow: 'visible'  /* ADD THIS */
                   }}>
                     <thead>
                       <tr style={{
@@ -4719,6 +4720,9 @@ function App() {
                         color: 'white'
                       }}>
                         {/* ✅ SORTABLE HEADERS */}
+                        <th style={{ padding: '1rem', textAlign: 'center', width: '80px' }}>
+                          Actions
+                        </th>
                         <th 
                           onClick={() => handleSortColumn('name')}
                           style={{ 
@@ -4781,7 +4785,6 @@ function App() {
                           )}
                         </th>
                         <th style={{ padding: '1rem', textAlign: 'center' }}>Status</th>
-                        <th style={{ padding: '1rem', textAlign: 'center' }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -4791,6 +4794,50 @@ function App() {
                           background: idx % 2 === 0 ? 'white' : 'var(--kinross-light-gray)',
                           borderBottom: '1px solid var(--kinross-medium-gray)'
                         }}>
+                          {/* ACTIONS COLUMN - NOW FIRST */}
+                          <td style={{ padding: '1rem', textAlign: 'center' }}>
+                            <div className="user-actions-dropdown">
+                              <button className="user-actions-trigger" title="User Actions">
+                                ✏️
+                              </button>
+                              <div className="user-actions-menu">
+                                <button
+                                  className="edit-action"
+                                  onClick={() => {
+                                    setEditingUser(user);
+                                    setUserFormData({
+                                      email: user.email,
+                                      name: user.name,
+                                      role: user.role,
+                                      department: user.department,
+                                      active: user.active
+                                    });
+                                    setShowUserModal(true);
+                                  }}
+                                >
+                                  <span>✏️</span> Edit User
+                                </button>
+                                <button
+                                  className="toggle-action"
+                                  onClick={() => toggleUserActive(user.id, user.active)}
+                                  disabled={user.id === authState.user?.id}
+                                  title={user.id === authState.user?.id ? "Cannot deactivate yourself" : ""}
+                                >
+                                  <span>{user.active ? '🔒' : '🔓'}</span>
+                                  {user.active ? 'Deactivate' : 'Activate'}
+                                </button>
+                                <button
+                                  className="delete-action"
+                                  onClick={() => deleteUser(user.id, user.name)}
+                                  disabled={user.id === authState.user?.id}
+                                  title={user.id === authState.user?.id ? "Cannot delete yourself" : ""}
+                                >
+                                  <span>🗑️</span> Delete User
+                                </button>
+                              </div>
+                            </div>
+                          </td>
+
                           <td style={{ padding: '1rem' }}>
                             <strong>{user.name}</strong>
                           </td>
@@ -4823,69 +4870,6 @@ function App() {
                             }}>
                               {user.active ? '✓ Active' : '✗ Inactive'}
                             </span>
-                          </td>
-                          <td style={{ padding: '1rem', textAlign: 'center' }}>
-                            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-                              <button
-                                onClick={() => {
-                                  setEditingUser(user);
-                                  setUserFormData({
-                                    email: user.email,
-                                    name: user.name,
-                                    role: user.role,
-                                    department: user.department,
-                                    active: user.active
-                                  });
-                                  setShowUserModal(true);
-                                }}
-                                style={{
-                                  padding: '0.5rem 1rem',
-                                  background: '#2196F3',
-                                  color: 'white',
-                                  border: 'none',
-                                  borderRadius: '4px',
-                                  cursor: 'pointer',
-                                  fontSize: '0.85rem',
-                                  fontWeight: '600'
-                                }}
-                              >
-                                ✏️ Edit
-                              </button>
-                              <button
-                                onClick={() => toggleUserActive(user.id, user.active)}
-                                disabled={user.id === authState.user?.id}
-                                style={{
-                                  padding: '0.5rem 1rem',
-                                  background: user.active ? '#FF9800' : '#4CAF50',
-                                  color: 'white',
-                                  border: 'none',
-                                  borderRadius: '4px',
-                                  cursor: user.id === authState.user?.id ? 'not-allowed' : 'pointer',
-                                  fontSize: '0.85rem',
-                                  fontWeight: '600',
-                                  opacity: user.id === authState.user?.id ? 0.5 : 1
-                                }}
-                              >
-                                {user.active ? '🔒 Deactivate' : '🔓 Activate'}
-                              </button>
-                              <button
-                                onClick={() => deleteUser(user.id, user.name)}
-                                disabled={user.id === authState.user?.id}
-                                style={{
-                                  padding: '0.5rem 1rem',
-                                  background: '#F44336',
-                                  color: 'white',
-                                  border: 'none',
-                                  borderRadius: '4px',
-                                  cursor: user.id === authState.user?.id ? 'not-allowed' : 'pointer',
-                                  fontSize: '0.85rem',
-                                  fontWeight: '600',
-                                  opacity: user.id === authState.user?.id ? 0.5 : 1
-                                }}
-                              >
-                                🗑️ Delete
-                              </button>
-                            </div>
                           </td>
                         </tr>
                       ))}
