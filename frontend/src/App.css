@@ -2448,3 +2448,20 @@ textarea {
   background: #FFEBEE;
   color: #F44336;
 }
+
+/* Confirmation Checkbox Animation */
+input[type="checkbox"]:checked {
+  animation: checkboxPulse 0.3s ease;
+}
+
+@keyframes checkboxPulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+  }
+}

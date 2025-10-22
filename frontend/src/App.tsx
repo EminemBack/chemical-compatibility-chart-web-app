@@ -1678,6 +1678,7 @@ function App() {
   const [container, setContainer] = useState('');
   const [containerType, setContainerType] = useState('');
   const [whatsappNumber, setWhatsappNumber] = useState('');
+  const [confirmationChecked, setConfirmationChecked] = useState(false); // confirmation checkbox
   const [hazardPairs, setHazardPairs] = useState<HazardPairData[]>([]);
   const [containers, setContainers] = useState<ContainerData[]>([]);
   // UPDATE THIS EXISTING LINE (change 'containers' to 'approvals'):
@@ -2493,6 +2494,12 @@ function App() {
       return;
     }
 
+    // ADD THIS VALIDATION BLOCK
+    if (!confirmationChecked) {
+      alert('⚠️ Safety Confirmation Required\n\nYou must confirm that you have reviewed all information and that the hazard classifications and distances are accurate before submitting.\n\nPlease check the confirmation checkbox to proceed.');
+      return;
+    }
+
     // VALIDATION CHECK:
     const isolationCheck = hasIsolationRequired();
     if (isolationCheck.hasIsolation) {
@@ -2552,9 +2559,11 @@ function App() {
         // Don't reset submittedBy - it's auto-filled
         setContainer('');
         setContainerType('');
+        setWhatsappNumber(''); // Clear WhatsApp number
         setSelectedHazards([]);
         setHazardPairs([]);
         setPairStatuses({});
+        setConfirmationChecked(false);  // Reset checkbox
         
         // Refresh containers list
         fetchContainers();
@@ -2580,6 +2589,7 @@ function App() {
     setHazardPairs([]);
     setPairStatuses({});
     setContainer(''); // Clear container ID
+    setConfirmationChecked(false);  // Reset checkbox
     
     // If department was selected, regenerate ID after reset
     if (currentDept) {
@@ -3698,6 +3708,99 @@ function App() {
                   </div>
                 )}
 
+                {/* Confirmation Checkbox */}
+                {selectedHazards.length > 0 && (
+                  <div style={{
+                    marginTop: '2rem',
+                    padding: '2rem',
+                    background: 'var(--kinross-light-gray)',
+                    borderRadius: '12px',
+                    border: '3px solid var(--kinross-gold)',
+                    boxShadow: '0 4px 15px rgba(212, 165, 83, 0.2)'
+                  }}>
+                    <h3 style={{
+                      color: 'var(--kinross-navy)',
+                      margin: '0 0 1.5rem 0',
+                      fontSize: '1.4rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.75rem'
+                    }}>
+                      <span style={{ fontSize: '1.8rem' }}>✅</span>
+                      Safety Confirmation Required
+                    </h3>
+                    
+                    <div style={{
+                      background: 'white',
+                      padding: '1.5rem',
+                      borderRadius: '10px',
+                      border: confirmationChecked ? '2px solid #4CAF50' : '2px solid var(--kinross-medium-gray)',
+                      transition: 'all 0.3s ease'
+                    }}>
+                      <label style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: '1rem',
+                        cursor: 'pointer',
+                        fontSize: '1.05rem',
+                        lineHeight: '1.6'
+                      }}>
+                        <input
+                          type="checkbox"
+                          checked={confirmationChecked}
+                          onChange={(e) => setConfirmationChecked(e.target.checked)}
+                          style={{
+                            width: '24px',
+                            height: '24px',
+                            marginTop: '0.25rem',
+                            cursor: 'pointer',
+                            flexShrink: 0,
+                            accentColor: 'var(--kinross-gold)'
+                          }}
+                        />
+                        <div>
+                          <strong style={{ color: 'var(--kinross-navy)', display: 'block', marginBottom: '0.75rem' }}>
+                            I hereby confirm that:
+                          </strong>
+                          <ul style={{
+                            margin: 0,
+                            paddingLeft: '1.5rem',
+                            color: 'var(--kinross-dark-gray)',
+                            lineHeight: '1.8'
+                          }}>
+                            <li>I have carefully <strong>read and reviewed all information</strong> provided in this form</li>
+                            <li>The <strong>selected hazard classifications are accurate</strong> and match the Safety Data Sheets (SDS)</li>
+                            <li>All <strong>distance measurements comply with the required safety distances</strong> as indicated by the compatibility assessment</li>
+                            <li>I understand that <strong>inaccurate information may result in serious safety hazards</strong> and regulatory violations</li>
+                          </ul>
+                        </div>
+                      </label>
+                      
+                      {!confirmationChecked && (
+                        <div style={{
+                          marginTop: '1rem',
+                          padding: '1rem',
+                          background: '#FFF3E0',
+                          borderRadius: '8px',
+                          borderLeft: '4px solid #FF9800'
+                        }}>
+                          <p style={{
+                            margin: 0,
+                            fontSize: '0.95rem',
+                            color: '#E65100',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem'
+                          }}>
+                            <span style={{ fontSize: '1.2rem' }}>⚠️</span>
+                            <strong>You must check this box to submit the safety assessment</strong>
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* Submit Section */}
                 {selectedHazards.length > 0 && (
                   <div className="submit-section-bottom">
@@ -3761,10 +3864,10 @@ function App() {
                       <button
                         className="submit-btn"
                         onClick={submitContainer}
-                        disabled={loading || hasIsolationRequired().hasIsolation || hasEmptyDistances()}
+                        disabled={loading || hasIsolationRequired().hasIsolation || hasEmptyDistances() || !confirmationChecked}
                         style={{
-                          opacity: (hasIsolationRequired().hasIsolation || hasEmptyDistances()) ? 0.4 : 1,
-                          cursor: (hasIsolationRequired().hasIsolation || hasEmptyDistances()) ? 'not-allowed' : 'pointer'
+                          opacity: (hasIsolationRequired().hasIsolation || hasEmptyDistances() || !confirmationChecked) ? 0.4 : 1,
+                          cursor: (hasIsolationRequired().hasIsolation || hasEmptyDistances() || !confirmationChecked) ? 'not-allowed' : 'pointer'
                         }}
                       >
                         {loading ? 'Submitting Assessment...' : 'Submit Safety Assessment'}
