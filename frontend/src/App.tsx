@@ -3426,7 +3426,7 @@ function App() {
                         alignItems: 'center',
                         gap: '0.75rem'
                       }}>
-                        📋 Safety Data Sheet (SDS) Lookup
+                        📋 3E Safety Data Sheet (SDS) Portal
                       </h3>
                       <p style={{ 
                         margin: 0, 
@@ -3434,12 +3434,12 @@ function App() {
                         fontSize: '1rem',
                         lineHeight: '1.5'
                       }}>
-                        Before selecting hazard classes, consult the SDS database to identify 
-                        the correct DOT hazard classifications for your chemicals.
+                        Before selecting hazard classes, consult the 3E Online Portal to identify 
+                        the correct DOT hazard classifications and safety information for your chemicals.
                       </p>
                     </div>
                     <a
-                      href="https://chemicalsafety.com/sds-search/"
+                      href="https://www.3eonline.com/EeeOnlinePortal/DesktopDefault.aspx?id=TxOE5W5W1q5pKcoZc9NDbXl4GjnGcejLNp1"
                       target="_blank"
                       rel="noopener noreferrer"
                       style={{
@@ -3469,7 +3469,7 @@ function App() {
                       }}
                     >
                       <span style={{ fontSize: '1.3rem' }}>🔍</span>
-                      <span>Open SDS Search</span>
+                      <span>Open 3E Portal</span>
                       <span style={{ fontSize: '1rem' }}>↗</span>
                     </a>
                   </div>
