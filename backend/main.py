@@ -113,7 +113,7 @@ class ContainerSubmission(BaseModel):
     department: str
     location: str
     submitted_by: str
-    phone_number: str # New field for phone number
+    whatsapp_number: str  # WhatsApp contact number
     container: str
     container_type: str
     selected_hazards: List[int]  # List of hazard category IDs
@@ -772,11 +772,11 @@ async def submit_container(submission: ContainerSubmission, authorization: str =
             async with conn.transaction():
                 # Create container record
                 container_id = await conn.fetchval("""
-                    INSERT INTO containers (department, location, submitted_by, phone_number, container, container_type, status)
+                    INSERT INTO containers (department, location, submitted_by, whatsapp_number, container, container_type, status)
                     VALUES ($1, $2, $3, $4, $5, $6, $7)
                     RETURNING id
                 """, submission.department, submission.location, submission.submitted_by, 
-                    submission.phone_number, submission.container, submission.container_type, 'pending')
+                    submission.whatsapp_number, submission.container, submission.container_type, 'pending')
                 
                 logger.info("Container created", container_id=container_id)
                 
@@ -895,13 +895,13 @@ async def get_containers(authorization: str = Header(None)):
         
         # Build query based on user role
         if current_user['role'] in ['hod', 'admin']:
-            container_query = """SELECT id, department, location, submitted_by, phone_number,
+            container_query = """SELECT id, department, location, submitted_by, whatsapp_number,
                     container, container_type, submitted_at, status, 
                     approval_comment, approved_by, approved_at 
                     FROM containers ORDER BY submitted_at DESC"""
             container_params = []
         else:
-            container_query = """SELECT id, department, location, submitted_by, phone_number, 
+            container_query = """SELECT id, department, location, submitted_by, whatsapp_number, 
                     container, container_type, submitted_at, status, 
                     approval_comment, approved_by, approved_at 
                     FROM containers WHERE submitted_by = $1 ORDER BY submitted_at DESC"""
@@ -958,7 +958,7 @@ async def get_containers(authorization: str = Header(None)):
                 "container": container_row['container'],
                 "container_type": container_row['container_type'],
                 "submitted_at": container_row['submitted_at'].isoformat(),
-                "phone_number": container_row['phone_number'],
+                "whatsapp_number": container_row['whatsapp_number'],
                 "status": container_row.get('status', 'pending'),
                 "approval_comment": container_row.get('approval_comment'),
                 "approved_by": container_row.get('approved_by'),
@@ -1315,7 +1315,7 @@ async def get_pending_containers(authorization: str = Header(None)):
                 "department": container_row['department'],
                 "location": container_row['location'],
                 "submitted_by": container_row['submitted_by'],
-                "phone_number": container_row['phone_number'], # ✅ INCLUDE PHONE NUMBER
+                "whatsapp_number": container_row['whatsapp_number'], # ✅ INCLUDE PHONE NUMBER
                 "container": container_row['container'],
                 "container_type": container_row['container_type'],
                 "submitted_at": container_row['submitted_at'].isoformat(),

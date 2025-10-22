@@ -24,7 +24,7 @@ interface ContainerData {
   department: string;
   location: string;
   submitted_by: string;
-  phone_number: string; // New field for phone number
+  whatsapp_number: string;  // WhatsApp contact number
   container: string;
   container_type: string;
   submitted_at: string;
@@ -1427,10 +1427,10 @@ const generateContainerPDF = async (container: ContainerData, hazardCategories: 
 
         <!-- Responsible Person/Phone Number -->
         <div style="margin-bottom: 55px; display: flex; align-items: center; gap: 30px;">
-          <div style="font-size: 60px; font-weight: bold; white-space: nowrap;">Responsible Person/Phone Number:</div>
+          <div style="font-size: 60px; font-weight: bold; white-space: nowrap;">Responsible Person/WhatsApp Number:</div>
           <div style="background: white; color: black; padding: 32px 48px; border-radius: 18px; 
                       font-size: 52px; font-weight: 600; flex: 1;">
-            ${container.submitted_by}  /  ${container.phone_number}
+            ${container.submitted_by}  /  ${container.whatsapp_number}
           </div>
         </div>
 
@@ -1677,7 +1677,7 @@ function App() {
   // const [submittedBy, setSubmittedBy] = useState('');
   const [container, setContainer] = useState('');
   const [containerType, setContainerType] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('');
+  const [whatsappNumber, setWhatsappNumber] = useState('');
   const [hazardPairs, setHazardPairs] = useState<HazardPairData[]>([]);
   const [containers, setContainers] = useState<ContainerData[]>([]);
   // UPDATE THIS EXISTING LINE (change 'containers' to 'approvals'):
@@ -2483,8 +2483,8 @@ function App() {
   };
 
   const submitContainer = async () => {
-    if (!department.trim() || !location.trim() || !container.trim() || !containerType.trim() || !phoneNumber.trim()) {
-      alert('Please fill in all required fields (Department, Location, Container, Type, Phone Number)');
+    if (!department.trim() || !location.trim() || !container.trim() || !containerType.trim() || !whatsappNumber.trim()) {
+      alert('Please fill in all required fields (Department, Location, Container, Type, WhatsApp Number)');
       return;
     }
     
@@ -2512,7 +2512,7 @@ function App() {
       department,
       location,
       submitted_by: authState.user?.name || '', // Use authenticated user's name
-      phone_number: phoneNumber, // Include phone number
+      whatsapp_number: whatsappNumber, // Include WhatsApp number
       container,
       container_type: containerType,
       selected_hazards: selectedHazards.map(h => h.id),
@@ -2575,7 +2575,7 @@ function App() {
     setDepartment('');
     setLocation('');
     setContainerType('');
-    setPhoneNumber(''); // Clear phone number
+    setWhatsappNumber(''); // Clear WhatsApp number
     setSelectedHazards([]);
     setHazardPairs([]);
     setPairStatuses({});
@@ -3289,11 +3289,11 @@ function App() {
                     </div>
                     <div className="form-field">
                       <label>
-                        Phone Number *
+                        WhatsApp Number *
                         <input
                           type="tel"
-                          value={phoneNumber}
-                          onChange={(e) => setPhoneNumber(e.target.value)}
+                          value={whatsappNumber}
+                          onChange={(e) => setWhatsappNumber(e.target.value)}
                           placeholder="+222 XX XX XX XX"
                           required
                           style={{
@@ -3315,7 +3315,7 @@ function App() {
                           marginTop: '0.25rem',
                           display: 'block'
                         }}>
-                          Contact number for the responsible person
+                          📱 WhatsApp contact number for the responsible person
                         </small>
                       </label>
                     </div>
@@ -3798,7 +3798,7 @@ function App() {
                             <span><strong>Container:</strong> {container.container}</span>
                             <span><strong>Type:</strong> {container.container_type}</span>
                             <span><strong>Submitted by:</strong> {container.submitted_by}</span>
-                            <span><strong>Phone:</strong> {container.phone_number}</span> {/* ADDING PHONE NUMBER */}
+                            <span><strong>WhatsApp:</strong> {container.whatsapp_number}</span>
                             <span><strong>Date:</strong> {new Date(container.submitted_at).toLocaleDateString()} - {new Date(container.submitted_at).toLocaleTimeString()}</span>
                             {container.approved_by && (
                               <span><strong>Approved by:</strong> {container.approved_by}</span>
@@ -3963,7 +3963,7 @@ function App() {
                             <span><strong>Location:</strong> {container.location}</span>
                             <span><strong>Container:</strong> {container.container}</span>
                             <span><strong>Submitted by:</strong> {container.submitted_by}</span>
-                            <span><strong>Phone:</strong> {container.phone_number}</span> {/* ADDING PHONE NUMBER */}
+                            <span><strong>WhatsApp:</strong> {container.whatsapp_number}</span>
                             <span><strong>Date:</strong> {new Date(container.submitted_at).toLocaleDateString()}</span>
                           </div>
                         </div>
