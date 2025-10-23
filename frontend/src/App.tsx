@@ -1679,6 +1679,7 @@ function App() {
   const [containerType, setContainerType] = useState('');
   const [whatsappNumber, setWhatsappNumber] = useState('');
   const [confirmationChecked, setConfirmationChecked] = useState(false); // confirmation checkbox
+  const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0); // PENDING APPROVALS COUNT
   const [hazardPairs, setHazardPairs] = useState<HazardPairData[]>([]);
   const [containers, setContainers] = useState<ContainerData[]>([]);
   // UPDATE THIS EXISTING LINE (change 'containers' to 'approvals'):
@@ -1765,12 +1766,33 @@ function App() {
     // fetchContainers();
   }, []);
 
-  // ADD THIS NEW useEffect HERE:
+  // useEffect to fetch containers and containers count after authState.user is set
   useEffect(() => {
     if (authState.user && !authState.loading) {
       fetchContainers(); // Only fetch containers after user is authenticated
+      
+      // Fetch pending count if user is admin or HOD
+      if (authState.user.role === 'admin' || authState.user.role === 'hod') {
+        fetchPendingApprovalsCount();
+      }
     }
   }, [authState.user, authState.loading]);
+
+  // useEffect - Auto-refresh pending count every 30 seconds
+  useEffect(() => {
+    if (authState.user && (authState.user.role === 'admin' || authState.user.role === 'hod')) {
+      // Initial fetch
+      fetchPendingApprovalsCount();
+      
+      // Set up interval to refresh every 30 seconds
+      const interval = setInterval(() => {
+        fetchPendingApprovalsCount();
+      }, 30000); // 30 seconds
+      
+      // Cleanup interval on unmount
+      return () => clearInterval(interval);
+    }
+  }, [authState.user]);
 
   // ADD THIS NEW useEffect:
   useEffect(() => {
@@ -2197,6 +2219,23 @@ function App() {
     }
   };
 
+  const fetchPendingApprovalsCount = async () => {
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(`${API_BASE}/containers/pending`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setPendingApprovalsCount(data.length);
+      }
+    } catch (error) {
+      console.error('Error fetching pending approvals count:', error);
+      setPendingApprovalsCount(0);
+    }
+  };
+
   const fetchDeletionRequests = async () => {
     try {
       const token = localStorage.getItem('access_token');
@@ -2243,6 +2282,7 @@ function App() {
         alert(`✅ Container ${status} successfully!\n\nComment: "${comment.trim()}"`);
         fetchPendingContainers();
         fetchContainers();
+        fetchPendingApprovalsCount(); // Refresh count
       } else {
         const errorData = await response.json();
         alert(`❌ Error: ${errorData.detail || 'Failed to process approval'}`);
@@ -2271,6 +2311,7 @@ function App() {
         alert('Container deleted successfully');
         fetchPendingContainers();
         fetchContainers();
+        fetchPendingApprovalsCount();
       } else {
         const error = await response.json();
         alert(`Error: ${error.detail}`);
@@ -2567,6 +2608,10 @@ function App() {
         
         // Refresh containers list
         fetchContainers();
+        // Update pending count if user is admin/HOD
+        if (authState.user && (authState.user.role === 'admin' || authState.user.role === 'hod')) {
+          fetchPendingApprovalsCount();
+        }
       } else {
         throw new Error('Failed to submit container data');
       }
@@ -3122,11 +3167,18 @@ function App() {
                   onClick={() => {
                     setActiveTab('approvals');
                     if (authState.user && (authState.user.role === 'hod' || authState.user.role === 'admin')) {
-                      fetchPendingContainers(); // Add this line
+                      fetchPendingContainers();
+                      fetchPendingApprovalsCount();
                     }
                   }}
+                  style={{ position: 'relative' }}  // ADD THIS
                 >
                   <span>Pending Approvals</span>
+                  {pendingApprovalsCount > 0 && (
+                    <span className="notification-badge">
+                      {pendingApprovalsCount}
+                    </span>
+                  )}
                 </button>
               )}
 
