@@ -2048,6 +2048,21 @@ function App() {
     }
   }>({});
 
+  // Attachment uploads
+  const [attachments, setAttachments] = useState<{
+    front: File | null;
+    inside: File | null;
+    side: File | null;
+  }>({ front: null, inside: null, side: null });
+
+  const [attachmentPreviews, setAttachmentPreviews] = useState<{
+    front: string | null;
+    inside: string | null;
+    side: string | null;
+  }>({ front: null, inside: null, side: null });
+
+  const [uploadingAttachments, setUploadingAttachments] = useState(false);
+
   const [approvalModal, setApprovalModal] = useState<{ isOpen: boolean; type: 'approve' | 'reject'; containerId: number }>({
     isOpen: false,
     type: 'approve',
@@ -2907,6 +2922,15 @@ function App() {
 
       if (response.ok) {
         const result = await response.json();
+
+        // Upload attachments if container was created successfully
+        if (result.container_id && (attachments.front || attachments.inside || attachments.side)) {
+          const uploadSuccess = await uploadAttachments(result.container_id);
+          if (!uploadSuccess) {
+            alert('Container submitted but some attachments failed to upload. You can add them later from container details.');
+          }
+        }
+
         // alert(`Container safety assessment submitted successfully!\nContainer ID: ${result.container_id}`);
         // Store container name and show modal instead of alert
         setSubmittedContainerName(result.container || container);
@@ -2923,7 +2947,10 @@ function App() {
         setHazardPairs([]);
         setPairStatuses({});
         setConfirmationChecked(false);  // Reset checkbox
-        
+        setAttachments({ front: null, inside: null, side: null });
+        setAttachmentPreviews({ front: null, inside: null, side: null });
+        setUploadingAttachments(false);
+
         // Refresh containers list
         fetchContainers();
         // Update pending count if user is admin/HOD
@@ -2943,7 +2970,7 @@ function App() {
 
   const resetForm = async () => {
     const currentDept = department; // Save current department
-    
+
     setDepartment('');
     setLocation('');
     setContainerType('');
@@ -2953,12 +2980,88 @@ function App() {
     setPairStatuses({});
     setContainer(''); // Clear container ID
     setConfirmationChecked(false);  // Reset checkbox
-    
+    setAttachments({ front: null, inside: null, side: null });
+    setAttachmentPreviews({ front: null, inside: null, side: null });
+    setUploadingAttachments(false);
+
     // If department was selected, regenerate ID after reset
     if (currentDept) {
       const newId = await generateContainerID(currentDept);
       setContainer(newId);
       setDepartment(currentDept); // Restore department
+    }
+  };
+
+  const handleAttachmentChange = (photoType: 'front' | 'inside' | 'side', file: File | null) => {
+    if (!file) {
+      setAttachments(prev => ({ ...prev, [photoType]: null }));
+      setAttachmentPreviews(prev => ({ ...prev, [photoType]: null }));
+      return;
+    }
+
+    // Validate file
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+    if (!validTypes.includes(file.type)) {
+      alert(`Invalid file type for ${photoType}. Please upload JPG or PNG.`);
+      return;
+    }
+
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+      alert(`File too large for ${photoType}. Maximum size is 10MB.`);
+      return;
+    }
+
+    // Set file and create preview
+    setAttachments(prev => ({ ...prev, [photoType]: file }));
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setAttachmentPreviews(prev => ({ ...prev, [photoType]: reader.result as string }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const uploadAttachments = async (containerId: number) => {
+    const photoTypes: ('front' | 'inside' | 'side')[] = ['front', 'inside', 'side'];
+    const uploadPromises = [];
+
+    for (const photoType of photoTypes) {
+      const file = attachments[photoType];
+      if (!file) continue;
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const promise = fetch(
+        `http://localhost:8000/containers/${containerId}/attachments?photo_type=${photoType}`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+          },
+          body: formData
+        }
+      );
+
+      uploadPromises.push(promise);
+    }
+
+    if (uploadPromises.length === 0) return true;
+
+    try {
+      const responses = await Promise.all(uploadPromises);
+      const allSuccess = responses.every(r => r.ok);
+
+      if (!allSuccess) {
+        console.error('Some attachments failed to upload');
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error uploading attachments:', error);
+      return false;
     }
   };
 
@@ -3800,6 +3903,358 @@ function App() {
                         </select>
                       </label>
                     </div>
+
+                    {/* Container Attachments Upload Section */}
+                    <div style={{
+                      gridColumn: '1 / -1',
+                      marginTop: '1.5rem',
+                      padding: '2rem',
+                      background: 'linear-gradient(135deg, var(--kinross-navy) 0%, var(--kinross-dark-navy) 100%)',
+                      borderRadius: '12px',
+                      boxShadow: '0 4px 20px rgba(30, 58, 95, 0.15)',
+                      border: '2px solid var(--kinross-gold)'
+                    }}>
+                      <h3 style={{
+                        margin: '0 0 1.5rem 0',
+                        color: 'white',
+                        fontSize: '1.3rem',
+                        fontWeight: '700',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.75rem'
+                      }}>
+                        <span style={{ fontSize: '1.5rem' }}>📷</span>
+                        Container Photos (Optional)
+                      </h3>
+
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+                        gap: '1.25rem'
+                      }}>
+                        {/* Front Photo */}
+                        <div style={{
+                          background: 'white',
+                          padding: '1.25rem',
+                          borderRadius: '10px',
+                          boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
+                          border: '2px solid var(--kinross-light-gray)'
+                        }}>
+                          <label style={{
+                            display: 'block',
+                            marginBottom: '0.75rem',
+                            fontWeight: '700',
+                            color: 'var(--kinross-navy)',
+                            fontSize: '0.95rem',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px'
+                          }}>
+                            📸 Front View
+                          </label>
+
+                          {attachmentPreviews.front ? (
+                            <div style={{ position: 'relative' }}>
+                              <img
+                                src={attachmentPreviews.front}
+                                alt="Front preview"
+                                style={{
+                                  width: '100%',
+                                  height: '160px',
+                                  objectFit: 'cover',
+                                  borderRadius: '6px',
+                                  marginBottom: '0.75rem',
+                                  border: '2px solid var(--kinross-gold)'
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleAttachmentChange('front', null)}
+                                style={{
+                                  position: 'absolute',
+                                  top: '8px',
+                                  right: '8px',
+                                  background: '#f44336',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '50%',
+                                  width: '28px',
+                                  height: '28px',
+                                  cursor: 'pointer',
+                                  fontSize: '16px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontWeight: '700',
+                                  boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+                                }}
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ) : (
+                            <div style={{
+                              width: '100%',
+                              height: '160px',
+                              border: '2px dashed var(--kinross-medium-gray)',
+                              borderRadius: '6px',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              marginBottom: '0.75rem',
+                              background: 'var(--kinross-light-gray)',
+                              transition: 'all 0.3s ease'
+                            }}>
+                              <span style={{
+                                fontSize: '2rem',
+                                marginBottom: '0.5rem',
+                                opacity: 0.5
+                              }}>📷</span>
+                              <span style={{
+                                color: 'var(--kinross-dark-gray)',
+                                fontSize: '0.85rem',
+                                fontStyle: 'italic'
+                              }}>No image selected</span>
+                            </div>
+                          )}
+
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/jpg,image/png"
+                            onChange={(e) => handleAttachmentChange('front', e.target.files?.[0] || null)}
+                            style={{
+                              width: '100%',
+                              padding: '0.65rem',
+                              fontSize: '0.85rem',
+                              border: '2px solid var(--kinross-medium-gray)',
+                              borderRadius: '6px',
+                              cursor: 'pointer',
+                              background: 'var(--kinross-white)',
+                              transition: 'all 0.3s ease'
+                            }}
+                          />
+                        </div>
+
+                        {/* Inside Photo */}
+                        <div style={{
+                          background: 'white',
+                          padding: '1.25rem',
+                          borderRadius: '10px',
+                          boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
+                          border: '2px solid var(--kinross-light-gray)'
+                        }}>
+                          <label style={{
+                            display: 'block',
+                            marginBottom: '0.75rem',
+                            fontWeight: '700',
+                            color: 'var(--kinross-navy)',
+                            fontSize: '0.95rem',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px'
+                          }}>
+                            📸 Inside View
+                          </label>
+
+                          {attachmentPreviews.inside ? (
+                            <div style={{ position: 'relative' }}>
+                              <img
+                                src={attachmentPreviews.inside}
+                                alt="Inside preview"
+                                style={{
+                                  width: '100%',
+                                  height: '160px',
+                                  objectFit: 'cover',
+                                  borderRadius: '6px',
+                                  marginBottom: '0.75rem',
+                                  border: '2px solid var(--kinross-gold)'
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleAttachmentChange('inside', null)}
+                                style={{
+                                  position: 'absolute',
+                                  top: '8px',
+                                  right: '8px',
+                                  background: '#f44336',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '50%',
+                                  width: '28px',
+                                  height: '28px',
+                                  cursor: 'pointer',
+                                  fontSize: '16px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontWeight: '700',
+                                  boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+                                }}
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ) : (
+                            <div style={{
+                              width: '100%',
+                              height: '160px',
+                              border: '2px dashed var(--kinross-medium-gray)',
+                              borderRadius: '6px',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              marginBottom: '0.75rem',
+                              background: 'var(--kinross-light-gray)',
+                              transition: 'all 0.3s ease'
+                            }}>
+                              <span style={{
+                                fontSize: '2rem',
+                                marginBottom: '0.5rem',
+                                opacity: 0.5
+                              }}>📷</span>
+                              <span style={{
+                                color: 'var(--kinross-dark-gray)',
+                                fontSize: '0.85rem',
+                                fontStyle: 'italic'
+                              }}>No image selected</span>
+                            </div>
+                          )}
+
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/jpg,image/png"
+                            onChange={(e) => handleAttachmentChange('inside', e.target.files?.[0] || null)}
+                            style={{
+                              width: '100%',
+                              padding: '0.65rem',
+                              fontSize: '0.85rem',
+                              border: '2px solid var(--kinross-medium-gray)',
+                              borderRadius: '6px',
+                              cursor: 'pointer',
+                              background: 'var(--kinross-white)',
+                              transition: 'all 0.3s ease'
+                            }}
+                          />
+                        </div>
+
+                        {/* Side Photo */}
+                        <div style={{
+                          background: 'white',
+                          padding: '1.25rem',
+                          borderRadius: '10px',
+                          boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
+                          border: '2px solid var(--kinross-light-gray)'
+                        }}>
+                          <label style={{
+                            display: 'block',
+                            marginBottom: '0.75rem',
+                            fontWeight: '700',
+                            color: 'var(--kinross-navy)',
+                            fontSize: '0.95rem',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px'
+                          }}>
+                            📸 Side View
+                          </label>
+
+                          {attachmentPreviews.side ? (
+                            <div style={{ position: 'relative' }}>
+                              <img
+                                src={attachmentPreviews.side}
+                                alt="Side preview"
+                                style={{
+                                  width: '100%',
+                                  height: '160px',
+                                  objectFit: 'cover',
+                                  borderRadius: '6px',
+                                  marginBottom: '0.75rem',
+                                  border: '2px solid var(--kinross-gold)'
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleAttachmentChange('side', null)}
+                                style={{
+                                  position: 'absolute',
+                                  top: '8px',
+                                  right: '8px',
+                                  background: '#f44336',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '50%',
+                                  width: '28px',
+                                  height: '28px',
+                                  cursor: 'pointer',
+                                  fontSize: '16px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontWeight: '700',
+                                  boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+                                }}
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ) : (
+                            <div style={{
+                              width: '100%',
+                              height: '160px',
+                              border: '2px dashed var(--kinross-medium-gray)',
+                              borderRadius: '6px',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              marginBottom: '0.75rem',
+                              background: 'var(--kinross-light-gray)',
+                              transition: 'all 0.3s ease'
+                            }}>
+                              <span style={{
+                                fontSize: '2rem',
+                                marginBottom: '0.5rem',
+                                opacity: 0.5
+                              }}>📷</span>
+                              <span style={{
+                                color: 'var(--kinross-dark-gray)',
+                                fontSize: '0.85rem',
+                                fontStyle: 'italic'
+                              }}>No image selected</span>
+                            </div>
+                          )}
+
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/jpg,image/png"
+                            onChange={(e) => handleAttachmentChange('side', e.target.files?.[0] || null)}
+                            style={{
+                              width: '100%',
+                              padding: '0.65rem',
+                              fontSize: '0.85rem',
+                              border: '2px solid var(--kinross-medium-gray)',
+                              borderRadius: '6px',
+                              cursor: 'pointer',
+                              background: 'var(--kinross-white)',
+                              transition: 'all 0.3s ease'
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      <p style={{
+                        marginTop: '1.25rem',
+                        marginBottom: 0,
+                        fontSize: '0.9rem',
+                        color: 'var(--kinross-gold)',
+                        fontStyle: 'italic',
+                        fontWeight: '600',
+                        textAlign: 'center'
+                      }}>
+                        💡 Upload photos of container views. Max 10MB per photo. JPG/PNG only.
+                      </p>
+                    </div>
+
                   </div>
                 </div>
 
