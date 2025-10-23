@@ -1669,6 +1669,321 @@ const SuccessModal: React.FC<{
   );
 };
 
+// Replace the existing ContainerDetailModal component (around line 1000)
+const ContainerDetailModal: React.FC<{
+  container: ContainerData | null;
+  isOpen: boolean;
+  onClose: () => void;
+  hazardCategories: HazardCategory[];
+  onGeneratePDF: (container: ContainerData) => void;
+  authUser: User | null;
+  onRequestDeletion: (containerId: number) => void;
+  // Add these new props for the helper functions
+  getStatusText: (status: string) => string;
+  getStatusColor: (status: string) => any;
+  getIsolationStatus: (is_isolated: boolean, min_required_distance: number) => any;
+}> = ({ 
+  container, 
+  isOpen, 
+  onClose, 
+  // hazardCategories, 
+  onGeneratePDF, 
+  authUser, 
+  onRequestDeletion,
+  getStatusText,
+  getStatusColor,
+  getIsolationStatus
+}) => {
+  if (!isOpen || !container) return null;
+
+  // Create StatusBadge component locally since it's also not available
+  const StatusBadge = ({ status }: { status: string }) => {
+    const getStatusStyle = () => {
+      switch (status) {
+        case 'approved': return { backgroundColor: '#e8f5e8', color: '#2e7d32', border: '2px solid #4caf50' };
+        case 'rejected': return { backgroundColor: '#ffebee', color: '#c62828', border: '2px solid #f44336' };
+        case 'pending': return { backgroundColor: '#fff3e0', color: '#f57c00', border: '2px solid #ff9800' };
+        default: return { backgroundColor: '#f5f5f5', color: '#666', border: '2px solid #ccc' };
+      }
+    };
+
+    return (
+      <span style={{
+        ...getStatusStyle(),
+        padding: '0.25rem 0.75rem',
+        borderRadius: '15px',
+        fontSize: '0.8rem',
+        fontWeight: '700',
+        textTransform: 'uppercase'
+      }}>
+        {status}
+      </span>
+    );
+  };
+
+  return (
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: 'rgba(30, 58, 95, 0.8)',
+      backdropFilter: 'blur(5px)',
+      zIndex: 1000,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '1rem'
+    }} onClick={onClose}>
+      <div style={{
+        background: 'white',
+        borderRadius: '16px',
+        maxWidth: '900px',
+        width: '100%',
+        maxHeight: '90vh',
+        overflow: 'auto',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+        border: '2px solid var(--kinross-gold)'
+      }} onClick={(e) => e.stopPropagation()}>
+        
+        {/* Modal Header */}
+        <div style={{
+          background: 'linear-gradient(135deg, var(--kinross-navy), var(--kinross-dark-navy))',
+          color: 'white',
+          padding: '1.5rem',
+          borderTopLeftRadius: '16px',
+          borderTopRightRadius: '16px',
+          position: 'relative'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <h2 style={{ margin: '0 0 0.5rem 0', fontSize: '1.8rem' }}>
+                Container #{container.container}
+              </h2>
+              <StatusBadge status={container.status} />
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              position: 'absolute',
+              top: '1rem',
+              right: '1rem',
+              background: 'rgba(255,255,255,0.2)',
+              border: '2px solid rgba(255,255,255,0.3)',
+              color: 'white',
+              width: '40px',
+              height: '40px',
+              borderRadius: '50%',
+              fontSize: '1.2rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Modal Content */}
+        <div style={{ padding: '2rem' }}>
+          {/* Container Meta */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '1rem',
+            marginBottom: '2rem',
+            padding: '1.5rem',
+            background: 'var(--kinross-light-gray)',
+            borderRadius: '10px'
+          }}>
+            <div><strong>Department:</strong> {container.department}</div>
+            <div><strong>Location:</strong> {container.location}</div>
+            <div><strong>Type:</strong> {container.container_type}</div>
+            <div><strong>Submitted by:</strong> {container.submitted_by}</div>
+            <div><strong>WhatsApp:</strong> {container.whatsapp_number}</div>
+            <div><strong>Date:</strong> {new Date(container.submitted_at).toLocaleDateString()} - {new Date(container.submitted_at).toLocaleTimeString()}</div>
+            {container.approved_by && (
+              <div><strong>Approved by:</strong> {container.approved_by}</div>
+            )}
+          </div>
+
+          {/* Approval Comments */}
+          {container.approval_comment && (
+            <div style={{
+              marginBottom: '2rem',
+              padding: '1.5rem',
+              background: container.status === 'approved' ? '#e8f5e8' : '#ffebee',
+              borderRadius: '10px',
+              border: `2px solid ${container.status === 'approved' ? '#4caf50' : '#f44336'}`
+            }}>
+              <h4 style={{ 
+                margin: '0 0 1rem 0', 
+                color: container.status === 'approved' ? '#2e7d32' : '#c62828' 
+              }}>
+                {container.status === 'approved' ? '✅ Approval' : '❌ Rejection'} Comments:
+              </h4>
+              <p style={{ margin: 0, fontStyle: 'italic' }}>{container.approval_comment}</p>
+            </div>
+          )}
+          
+          {/* Hazards */}
+          <div style={{ marginBottom: '2rem' }}>
+            <h4 style={{ color: 'var(--kinross-navy)', marginBottom: '1rem' }}>Hazards Present:</h4>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+              {container.hazards.map((hazard, idx) => (
+                <span key={idx} style={{
+                  background: 'var(--kinross-gold)',
+                  color: 'white',
+                  padding: '0.5rem 1rem',
+                  borderRadius: '20px',
+                  fontSize: '0.85rem',
+                  fontWeight: '600'
+                }}>
+                  Class {hazard.hazard_class} - {hazard.name}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Compatibility Assessment */}
+          <div style={{ marginBottom: '2rem' }}>
+            <h4 style={{ color: 'var(--kinross-navy)', marginBottom: '1rem' }}>Compatibility Assessment:</h4>
+            {container.pairs.length === 0 ? (
+              <p style={{ fontStyle: 'italic', color: 'var(--kinross-dark-gray)' }}>
+                Single hazard container - no pairs to assess
+              </p>
+            ) : (
+              <div style={{ display: 'grid', gap: '1rem' }}>
+                {container.pairs.map(pair => {
+                  const isolationStatus = getIsolationStatus(pair.is_isolated, pair.min_required_distance || 0);
+                  return (
+                    <div key={pair.id} style={{
+                      padding: '1rem',
+                      borderRadius: '8px',
+                      border: '2px solid transparent',
+                      ...getStatusColor(pair.status)
+                    }}>
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '1rem',
+                        marginBottom: '0.75rem',
+                        fontWeight: '600',
+                        flexWrap: 'wrap'
+                      }}>
+                        <span>{pair.hazard_a_name}</span>
+                        <span style={{ color: 'var(--kinross-gold)', fontSize: '1.2rem' }}>↔</span>
+                        <span>{pair.hazard_b_name}</span>
+                      </div>
+                      <div style={{
+                        display: 'flex',
+                        gap: '1.5rem',
+                        alignItems: 'center',
+                        fontSize: '0.9rem',
+                        flexWrap: 'wrap'
+                      }}>
+                        <span><strong>Actual:</strong> {pair.distance}m</span>
+                        <span>
+                          <strong>Required:</strong> {
+                            pair.min_required_distance === null 
+                              ? 'Must Be Isolated' 
+                              : `${pair.min_required_distance}m`
+                          }
+                        </span>
+                        <span style={{
+                          backgroundColor: isolationStatus.bgColor,
+                          color: isolationStatus.color,
+                          padding: '0.25rem 0.75rem',
+                          borderRadius: '15px',
+                          fontSize: '0.8rem',
+                          fontWeight: '700'
+                        }}>
+                          {isolationStatus.text}
+                        </span>
+                        <span style={{
+                          padding: '0.25rem 0.75rem',
+                          borderRadius: '15px',
+                          fontSize: '0.8rem',
+                          fontWeight: '700',
+                          textTransform: 'uppercase',
+                          backgroundColor: getStatusColor(pair.status).backgroundColor,
+                          color: getStatusColor(pair.status).color
+                        }}>
+                          {getStatusText(pair.status)}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Action Buttons */}
+          <div style={{
+            display: 'flex',
+            gap: '1rem',
+            justifyContent: 'flex-end',
+            flexWrap: 'wrap',
+            borderTop: '2px solid var(--kinross-light-gray)',
+            paddingTop: '1.5rem'
+          }}>
+            {/* PDF Download Button - Only for approved containers */}
+            {container.status === 'approved' && (
+              <button
+                onClick={() => onGeneratePDF(container)}
+                style={{
+                  padding: '0.875rem 2rem',
+                  background: 'linear-gradient(135deg, var(--kinross-gold), var(--kinross-dark-gold))',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontWeight: '700',
+                  fontSize: '1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                  boxShadow: '0 4px 15px rgba(212, 165, 83, 0.3)',
+                  transition: 'all 0.3s ease'
+                }}
+              >
+                <span style={{ fontSize: '1.2rem' }}>📄</span>
+                <span>Download Safety Label PDF</span>
+              </button>
+            )}
+
+            {/* Delete Button - Only for users who submitted */}
+            {authUser && authUser.role === 'user' && container.submitted_by === authUser.name && (
+              <button
+                onClick={() => onRequestDeletion(container.id)}
+                style={{
+                  padding: '0.875rem 1.5rem',
+                  background: '#f44336',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '1rem',
+                  cursor: 'pointer',
+                  fontWeight: '600',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}
+              >
+                🗑️ Request Deletion
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 function App() {
   const [hazardCategories, setHazardCategories] = useState<HazardCategory[]>([]);
   const [selectedHazards, setSelectedHazards] = useState<HazardCategory[]>([]);
@@ -1687,6 +2002,9 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [pairStatuses, setPairStatuses] = useState<{[key: string]: any}>({});
   const [pendingContainers, setPendingContainers] = useState<ContainerData[]>([]);
+  // Add this with your other state declarations
+  // const [expandedContainers, setExpandedContainers] = useState<Set<number>>(new Set());
+  const [containerModalOpen, setContainerModalOpen] = useState<number | null>(null);
 
   const [deletionRequests, setDeletionRequests] = useState<DeletionRequest[]>([]);
   const [showDeletionModal, setShowDeletionModal] = useState(false);
@@ -3047,6 +3365,27 @@ function App() {
     }
   };
 
+  // Expand/collapse container details
+  // const toggleContainerExpand = (containerId: number) => {
+  //   setExpandedContainers(prev => {
+  //     const newSet = new Set(prev);
+  //     if (newSet.has(containerId)) {
+  //       newSet.delete(containerId);
+  //     } else {
+  //       newSet.add(containerId);
+  //     }
+  //     return newSet;
+  //   });
+  // };
+
+  const openContainerModal = (containerId: number) => {
+    setContainerModalOpen(containerId);
+  };
+
+  const closeContainerModal = () => {
+    setContainerModalOpen(null);
+  };
+
   return (
     <div className="App">
       {/* Show loading spinner while checking auth */}
@@ -3933,166 +4272,245 @@ function App() {
             {activeTab === 'containers' && (
               <div className="containers-view">
                 <h2>Container Safety Assessments</h2>
-                <div className="containers-list">
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+                  gap: '1.5rem',
+                  marginTop: '2rem'
+                }}>
                   {containers.length === 0 ? (
-                    <div className="no-containers">
-                      <p>No container assessments found.</p>
-                      <button onClick={() => setActiveTab('form')}>Create New Assessment</button>
+                    <div style={{
+                      gridColumn: '1 / -1',
+                      textAlign: 'center',
+                      padding: '3rem',
+                      color: 'var(--kinross-dark-gray)',
+                      background: 'var(--kinross-light-gray)',
+                      borderRadius: '12px'
+                    }}>
+                      <p style={{ margin: '0 0 1rem 0', fontSize: '1.1rem' }}>No container assessments found.</p>
+                      <button 
+                        onClick={() => setActiveTab('form')}
+                        style={{
+                          background: 'var(--kinross-gold)',
+                          color: 'white',
+                          border: 'none',
+                          padding: '1rem 2rem',
+                          borderRadius: '6px',
+                          fontWeight: '600',
+                          cursor: 'pointer',
+                          transition: 'all 0.3s ease'
+                        }}
+                      >
+                        Create New Assessment
+                      </button>
                     </div>
                   ) : (
-                    containers.map(container => (
-                      <div key={container.id} className="container-card">
-                        <div className="container-header">
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <h3>Container #{container.container}</h3>
-                            <StatusBadge status={container.status} />
-                          </div>
-                          <div className="container-meta">
-                            <span><strong>Department:</strong> {container.department}</span>
-                            <span><strong>Location:</strong> {container.location}</span>
-                            <span><strong>Container:</strong> {container.container}</span>
-                            <span><strong>Type:</strong> {container.container_type}</span>
-                            <span><strong>Submitted by:</strong> {container.submitted_by}</span>
-                            <span><strong>WhatsApp:</strong> {container.whatsapp_number}</span>
-                            <span><strong>Date:</strong> {new Date(container.submitted_at).toLocaleDateString()} - {new Date(container.submitted_at).toLocaleTimeString()}</span>
-                            {container.approved_by && (
-                              <span><strong>Approved by:</strong> {container.approved_by}</span>
-                            )}
-                            {container.approval_comment && (
-                              <span><strong>Comments:</strong> {container.approval_comment}</span>
-                            )}
-                          </div>
-                        </div>
-                        
-                        <div className="container-hazards">
-                          <h4>Hazards Present:</h4>
-                          <div className="hazard-tags">
-                            {container.hazards.map((hazard, idx) => (
-                              <span key={idx} className="hazard-tag">
-                                Class {hazard.hazard_class} - {hazard.name}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                        
-                        <div className="container-pairs">
-                          <h4>Compatibility Assessment:</h4>
-                          <div className="pairs-results">
-                            {/* // In your App.tsx, update the container display section */}
-                            {container.pairs.length === 0 ? (
-                              <p style={{ fontStyle: 'italic', color: 'var(--kinross-dark-gray)' }}>
-                                Single hazard container - no pairs to assess
-                              </p>
-                            ) : (
-                              container.pairs.map(pair => {
-                                const isolationStatus = getIsolationStatus(pair.is_isolated, pair.min_required_distance || 0);
-                                return (
-                                  <div key={pair.id} className="pair-result" style={getStatusColor(pair.status)}>
-                                    <div className="pair-names">
-                                      <span>{pair.hazard_a_name}</span>
-                                      <span className="separator">↔</span>
-                                      <span>{pair.hazard_b_name}</span>
-                                    </div>
-                                    <div className="pair-details">
-                                      <span><strong>Actual:</strong> {pair.distance}m</span>
-                                      <span>
-                                        <strong>Required:</strong> {
-                                          pair.min_required_distance === null 
-                                            ? 'Must Be Isolated' 
-                                            : `${pair.min_required_distance}m`
-                                        }
-                                      </span>
-                                      <span 
-                                        className="isolation-badge"
-                                        style={{ 
-                                          backgroundColor: isolationStatus.bgColor, 
-                                          color: isolationStatus.color,
-                                          padding: '0.25rem 0.75rem',
-                                          borderRadius: '15px',
-                                          fontSize: '0.8rem',
-                                          fontWeight: '700'
-                                        }}
-                                      >
-                                        {isolationStatus.text}
-                                      </span>
-                                      <span className={`status-badge ${pair.status}`}>
-                                        {getStatusText(pair.status)}
-                                      </span>
-                                    </div>
-                                  </div>
-                                );
-                              })
-                            )}
+                    containers.map(container => {
+                      return (
+                        <div 
+                          key={container.id} 
+                          className="container-card" 
+                          style={{
+                            padding: '1.5rem',
+                            background: 'var(--kinross-white)',
+                            borderRadius: '12px',
+                            boxShadow: '0 4px 15px rgba(30, 58, 95, 0.1)',
+                            border: '1px solid var(--kinross-medium-gray)',
+                            borderLeft: '5px solid var(--kinross-gold)',
+                            cursor: 'pointer',
+                            transition: 'all 0.3s ease',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'space-between',
+                            minHeight: '200px',
+                            maxHeight: '200px',
+                            position: 'relative',
+                            overflow: 'hidden'
+                          }}
+                          onClick={() => openContainerModal(container.id)}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.transform = 'translateY(-4px)';
+                            e.currentTarget.style.boxShadow = '0 8px 25px rgba(30, 58, 95, 0.15)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.transform = 'translateY(0)';
+                            e.currentTarget.style.boxShadow = '0 4px 15px rgba(30, 58, 95, 0.1)';
+                          }}
+                        >
+                          {/* Header Section */}
+                          <div>
+                            <div style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'flex-start',
+                              marginBottom: '1rem'
+                            }}>
+                              <h3 style={{ 
+                                margin: 0, 
+                                fontSize: '1.1rem', 
+                                color: 'var(--kinross-navy)',
+                                fontWeight: '700',
+                                lineHeight: '1.2',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                maxWidth: '60%'
+                              }}>
+                                #{container.container}
+                              </h3>
+                              <StatusBadge status={container.status} />
+                            </div>
+
+                            {/* Quick Info Grid */}
+                            <div style={{
+                              display: 'grid',
+                              gap: '0.5rem',
+                              fontSize: '0.85rem',
+                              color: 'var(--kinross-dark-gray)'
+                            }}>
+                              <div style={{
+                                display: 'flex',
+                                justifyContent: 'space-between'
+                              }}>
+                                <span style={{ fontWeight: '600' }}>Department:</span>
+                                <span style={{ 
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                  maxWidth: '60%',
+                                  textAlign: 'right'
+                                }}>
+                                  {container.department}
+                                </span>
+                              </div>
+                              
+                              <div style={{
+                                display: 'flex',
+                                justifyContent: 'space-between'
+                              }}>
+                                <span style={{ fontWeight: '600' }}>Date:</span>
+                                <span>{new Date(container.submitted_at).toLocaleDateString()}</span>
+                              </div>
+                              
+                              <div style={{
+                                display: 'flex',
+                                justifyContent: 'space-between'
+                              }}>
+                                <span style={{ fontWeight: '600' }}>Hazards:</span>
+                                <span style={{
+                                  background: 'var(--kinross-gold)',
+                                  color: 'white',
+                                  padding: '0.15rem 0.5rem',
+                                  borderRadius: '10px',
+                                  fontSize: '0.75rem',
+                                  fontWeight: '700',
+                                  minWidth: '20px',
+                                  textAlign: 'center'
+                                }}>
+                                  {container.hazards.length}
+                                </span>
+                              </div>
+                            </div>
                           </div>
 
-                          {/* PDF Download Button - Only for approved containers */}
-                          {container.status === 'approved' && (
-                            <div style={{ 
-                              marginTop: '1.5rem', 
-                              padding: '1rem', 
-                              background: '#f9f9f9', 
-                              borderRadius: '8px',
-                              display: 'flex',
-                              justifyContent: 'flex-end'
+                          {/* Footer Section */}
+                          <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            paddingTop: '1rem',
+                            borderTop: '1px solid var(--kinross-light-gray)',
+                            marginTop: 'auto'
+                          }}>
+                            <div style={{
+                              fontSize: '0.75rem',
+                              color: 'var(--kinross-dark-gray)',
+                              fontStyle: 'italic'
                             }}>
-                              <button
-                                onClick={() => generateContainerPDF(container, hazardCategories)}
-                                style={{
-                                  padding: '0.875rem 2rem',
-                                  background: 'linear-gradient(135deg, var(--kinross-gold), var(--kinross-dark-gold))',
-                                  color: 'white',
-                                  border: 'none',
-                                  borderRadius: '6px',
-                                  cursor: 'pointer',
-                                  fontWeight: '700',
-                                  fontSize: '1rem',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '0.75rem',
-                                  boxShadow: '0 4px 15px rgba(212, 165, 83, 0.3)',
-                                  transition: 'all 0.3s ease'
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.transform = 'translateY(-2px)';
-                                  e.currentTarget.style.boxShadow = '0 6px 20px rgba(212, 165, 83, 0.4)';
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.transform = 'translateY(0)';
-                                  e.currentTarget.style.boxShadow = '0 4px 15px rgba(212, 165, 83, 0.3)';
-                                }}
-                              >
-                                <span style={{ fontSize: '1.2rem' }}>📄</span>
-                                <span>Download Safety Label PDF</span>
-                              </button>
+                              Click to view details
+                            </div>
+                            
+                            <div style={{
+                              background: 'var(--kinross-navy)',
+                              color: 'white',
+                              padding: '0.25rem 0.5rem',
+                              borderRadius: '4px',
+                              fontSize: '0.75rem',
+                              fontWeight: '600',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.25rem'
+                            }}>
+                              <span>🔍</span>
+                              <span>VIEW</span>
+                            </div>
+                          </div>
+
+                          {/* Quick Action Buttons - Only for specific actions */}
+                          {(container.status === 'approved' || 
+                            (authState.user && authState.user.role === 'user' && container.submitted_by === authState.user.name)) && (
+                            <div style={{
+                              position: 'absolute',
+                              top: '0.5rem',
+                              right: '0.5rem',
+                              display: 'flex',
+                              gap: '0.25rem'
+                            }}>
+                              {container.status === 'approved' && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    generateContainerPDF(container, hazardCategories);
+                                  }}
+                                  style={{
+                                    width: '24px',
+                                    height: '24px',
+                                    background: 'var(--kinross-gold)',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    fontSize: '0.7rem',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                  }}
+                                  title="Download PDF"
+                                >
+                                  📄
+                                </button>
+                              )}
+
+                              {authState.user && authState.user.role === 'user' && container.submitted_by === authState.user.name && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedContainerForDeletion(container.id);
+                                    setShowDeletionModal(true);
+                                  }}
+                                  style={{
+                                    width: '24px',
+                                    height: '24px',
+                                    background: '#f44336',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    fontSize: '0.7rem',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                  }}
+                                  title="Request Deletion"
+                                >
+                                  🗑️
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>
-
-                        {/* ADD THE DELETE BUTTON HERE (inside the container-card but after container-pairs): */}
-                        {authState.user && authState.user.role === 'user' && container.submitted_by === authState.user.name && (
-                          <div style={{ marginTop: '1rem', textAlign: 'right', padding: '0 2rem 2rem 2rem' }}>
-                            <button
-                              onClick={() => {
-                                setSelectedContainerForDeletion(container.id);
-                                setShowDeletionModal(true);
-                              }}
-                              style={{
-                                padding: '0.5rem 1rem',
-                                background: '#f44336',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '4px',
-                                fontSize: '0.9rem',
-                                cursor: 'pointer',
-                                fontWeight: '600'
-                              }}
-                            >
-                              🗑️ Request Deletion
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               </div>
@@ -5368,6 +5786,26 @@ function App() {
                 </div>
               </div>
             </div>
+          )}
+
+          {/* Container Detail Modal */}
+          {containerModalOpen && (
+            <ContainerDetailModal
+              container={containers.find(c => c.id === containerModalOpen) || null}
+              isOpen={containerModalOpen !== null}
+              onClose={closeContainerModal}
+              hazardCategories={hazardCategories}
+              onGeneratePDF={(container) => generateContainerPDF(container, hazardCategories)}
+              authUser={authState.user}
+              onRequestDeletion={(containerId) => {
+                setSelectedContainerForDeletion(containerId);
+                setShowDeletionModal(true);
+                closeContainerModal();
+              }}
+              getStatusText={getStatusText}
+              getStatusColor={getStatusColor}
+              getIsolationStatus={getIsolationStatus}
+            />
           )}
         </>
       )}

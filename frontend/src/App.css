@@ -2505,3 +2505,94 @@ input[type="checkbox"]:checked {
   position: relative; /* Add this to existing styles */
   overflow: hidden;
 }
+
+/* Add these animations at the end of App.css */
+
+/* Container Card Animations */
+.container-card {
+  transition: all 0.3s ease !important;
+}
+
+.container-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(30, 58, 95, 0.15);
+}
+
+/* Expand/Collapse Animation */
+@keyframes expandDown {
+  from {
+    opacity: 0;
+    max-height: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    max-height: 500px;
+    transform: translateY(0);
+  }
+}
+
+.expanded-content {
+  animation: expandDown 0.3s ease-out;
+}
+
+/* Modal Fade In */
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.container-detail-modal {
+  animation: modalFadeIn 0.3s ease-out;
+}
+
+/* Add these responsive styles for container cards */
+
+/* Container Grid Responsive */
+@media (max-width: 1200px) {
+  .containers-view > div:last-child {
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)) !important;
+    gap: 1.25rem !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .containers-view > div:last-child {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)) !important;
+    gap: 1rem !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .containers-view > div:last-child {
+    grid-template-columns: 1fr !important;
+    gap: 1rem !important;
+  }
+}
+
+/* Container Card Hover Effects */
+.container-card {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.container-card:hover {
+  transform: translateY(-4px) !important;
+  box-shadow: 0 12px 35px rgba(30, 58, 95, 0.2) !important;
+}
+
+.container-card:active {
+  transform: translateY(-2px) !important;
+  transition: all 0.1s ease !important;
+}
+
+/* Status Badge in Square Cards */
+.container-card .status-badge {
+  font-size: 0.7rem !important;
+  padding: 0.2rem 0.6rem !important;
+}
