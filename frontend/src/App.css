@@ -2596,3 +2596,57 @@ input[type="checkbox"]:checked {
   font-size: 0.7rem !important;
   padding: 0.2rem 0.6rem !important;
 }
+
+/* Pending Approval Cards Specific Styles */
+.pending-approval-card {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.pending-approval-card:hover {
+  transform: translateY(-4px) !important;
+  box-shadow: 0 12px 35px rgba(255, 152, 0, 0.2) !important;
+}
+
+.pending-approval-card .approval-actions button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.pending-approval-card .approval-actions button:active {
+  transform: translateY(0);
+}
+
+/* Urgent Badge Animation */
+@keyframes urgentPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.8;
+  }
+}
+
+.urgent-badge {
+  animation: urgentPulse 2s infinite;
+}
+
+/* Responsive for Pending Approvals */
+@media (max-width: 1200px) {
+  .containers-view .pending-approvals-grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)) !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .containers-view .pending-approvals-grid {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)) !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .containers-view .pending-approvals-grid {
+    grid-template-columns: 1fr !important;
+  }
+}

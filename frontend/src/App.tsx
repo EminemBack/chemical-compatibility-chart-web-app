@@ -4517,142 +4517,322 @@ function App() {
             )}
             {activeTab === 'approvals' && authState.user && (authState.user.role === 'hod' || authState.user.role === 'admin') && (
               <div className="containers-view">
-                <h2>Pending Container Approvals</h2>
-                <div className="containers-list">
+                <div style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center',
+                  marginBottom: '2rem'
+                }}>
+                  <div>
+                    <h2 style={{ margin: '0 0 0.5rem 0' }}>Pending Container Approvals</h2>
+                    <p style={{ 
+                      margin: 0,
+                      color: 'var(--kinross-dark-gray)',
+                      fontSize: '1rem'
+                    }}>
+                      Review and approve container safety assessments
+                    </p>
+                  </div>
+                  
+                  {pendingContainers.length > 0 && (
+                    <div style={{
+                      background: '#fff3e0',
+                      color: '#e65100',
+                      padding: '0.75rem 1.5rem',
+                      borderRadius: '25px',
+                      fontSize: '1rem',
+                      fontWeight: '700',
+                      border: '2px solid #ff9800',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem'
+                    }}>
+                      <span style={{ fontSize: '1.2rem' }}>⏳</span>
+                      <span>{pendingContainers.length} Pending</span>
+                    </div>
+                  )}
+                </div>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', // Slightly wider for approval actions
+                  gap: '1.5rem',
+                  marginTop: '2rem'
+                }}>
                   {pendingContainers.length === 0 ? (
-                    <div className="no-containers">
-                      <p>No pending approvals.</p>
+                    <div style={{
+                      gridColumn: '1 / -1',
+                      textAlign: 'center',
+                      padding: '3rem',
+                      color: 'var(--kinross-dark-gray)',
+                      background: 'var(--kinross-light-gray)',
+                      borderRadius: '12px'
+                    }}>
+                      <p style={{ margin: '0', fontSize: '1.1rem' }}>No pending approvals.</p>
                     </div>
                   ) : (
                     pendingContainers.map(container => (
-                      <div key={container.id} className="container-card">
-                        <div className="container-header">
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <h3>Container #{container.container}</h3>
-                            <StatusBadge status={container.status} />
+                      <div 
+                        key={container.id} 
+                        className="container-card" 
+                        style={{
+                          padding: '1.5rem',
+                          background: 'var(--kinross-white)',
+                          borderRadius: '12px',
+                          boxShadow: '0 4px 15px rgba(30, 58, 95, 0.1)',
+                          border: '1px solid var(--kinross-medium-gray)',
+                          borderLeft: '5px solid #ff9800', // Orange for pending
+                          cursor: 'pointer',
+                          transition: 'all 0.3s ease',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'space-between',
+                          minHeight: '240px', // Slightly taller for approval actions
+                          maxHeight: '240px',
+                          position: 'relative',
+                          overflow: 'hidden'
+                        }}
+                        onClick={() => openContainerModal(container.id)}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = 'translateY(-4px)';
+                          e.currentTarget.style.boxShadow = '0 8px 25px rgba(30, 58, 95, 0.15)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = 'translateY(0)';
+                          e.currentTarget.style.boxShadow = '0 4px 15px rgba(30, 58, 95, 0.1)';
+                        }}
+                      >
+                        {/* Header Section */}
+                        <div>
+                          <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'flex-start',
+                            marginBottom: '1rem'
+                          }}>
+                            <h3 style={{ 
+                              margin: 0, 
+                              fontSize: '1.1rem', 
+                              color: 'var(--kinross-navy)',
+                              fontWeight: '700',
+                              lineHeight: '1.2',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              maxWidth: '60%'
+                            }}>
+                              #{container.container}
+                            </h3>
+                            <span style={{
+                              backgroundColor: '#fff3e0',
+                              color: '#f57c00',
+                              border: '2px solid #ff9800',
+                              padding: '0.2rem 0.6rem',
+                              borderRadius: '15px',
+                              fontSize: '0.7rem',
+                              fontWeight: '700',
+                              textTransform: 'uppercase'
+                            }}>
+                              PENDING
+                            </span>
                           </div>
-                          <div className="container-meta">
-                            <span><strong>Department:</strong> {container.department}</span>
-                            <span><strong>Location:</strong> {container.location}</span>
-                            <span><strong>Container:</strong> {container.container}</span>
-                            <span><strong>Submitted by:</strong> {container.submitted_by}</span>
-                            <span><strong>WhatsApp:</strong> {container.whatsapp_number}</span>
-                            <span><strong>Date:</strong> {new Date(container.submitted_at).toLocaleDateString()}</span>
-                          </div>
-                        </div>
-                        
-                        <div className="container-hazards">
-                          <h4>Hazards Present:</h4>
-                          <div className="hazard-tags">
-                            {container.hazards.map((hazard, idx) => (
-                              <span key={idx} className="hazard-tag">
-                                Class {hazard.hazard_class} - {hazard.name}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
 
-                        {container.pairs && container.pairs.length > 0 && (
-                          <div className="container-pairs">
-                            <h4>Compatibility Assessment:</h4>
-                            <div className="pairs-results">
-                              {container.pairs.map(pair => {
-                                const isolationStatus = getIsolationStatus(pair.is_isolated, pair.min_required_distance || 0);
-                                return (
-                                  <div key={pair.id} className="pair-result" style={getStatusColor(pair.status)}>
-                                    <div className="pair-names">
-                                      <span>{pair.hazard_a_name}</span>
-                                      <span className="separator">↔</span>
-                                      <span>{pair.hazard_b_name}</span>
-                                    </div>
-                                    <div className="pair-details">
-                                      <span><strong>Actual:</strong> {pair.distance}m</span>
-                                      <span>
-                                        <strong>Required:</strong> {
-                                          pair.min_required_distance === null 
-                                            ? 'Must Be Isolated' 
-                                            : `${pair.min_required_distance}m`
-                                        }
-                                      </span>
-                                      <span 
-                                        className="isolation-badge"
-                                        style={{ 
-                                          backgroundColor: isolationStatus.bgColor, 
-                                          color: isolationStatus.color,
-                                          padding: '0.25rem 0.75rem',
-                                          borderRadius: '15px',
-                                          fontSize: '0.8rem',
-                                          fontWeight: '700'
-                                        }}
-                                      >
-                                        {isolationStatus.text}
-                                      </span>
-                                      <span className={`status-badge ${pair.status}`}>
-                                        {getStatusText(pair.status)}
-                                      </span>
-                                    </div>
-                                  </div>
-                                );
-                              })}
+                          {/* Quick Info Grid */}
+                          <div style={{
+                            display: 'grid',
+                            gap: '0.5rem',
+                            fontSize: '0.85rem',
+                            color: 'var(--kinross-dark-gray)'
+                          }}>
+                            <div style={{
+                              display: 'flex',
+                              justifyContent: 'space-between'
+                            }}>
+                              <span style={{ fontWeight: '600' }}>Department:</span>
+                              <span style={{ 
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                maxWidth: '60%',
+                                textAlign: 'right'
+                              }}>
+                                {container.department}
+                              </span>
+                            </div>
+                            
+                            <div style={{
+                              display: 'flex',
+                              justifyContent: 'space-between'
+                            }}>
+                              <span style={{ fontWeight: '600' }}>Submitted:</span>
+                              <span>{new Date(container.submitted_at).toLocaleDateString()}</span>
+                            </div>
+                            
+                            <div style={{
+                              display: 'flex',
+                              justifyContent: 'space-between'
+                            }}>
+                              <span style={{ fontWeight: '600' }}>By:</span>
+                              <span style={{ 
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                maxWidth: '60%',
+                                textAlign: 'right'
+                              }}>
+                                {container.submitted_by}
+                              </span>
+                            </div>
+
+                            <div style={{
+                              display: 'flex',
+                              justifyContent: 'space-between'
+                            }}>
+                              <span style={{ fontWeight: '600' }}>Hazards:</span>
+                              <span style={{
+                                background: 'var(--kinross-gold)',
+                                color: 'white',
+                                padding: '0.15rem 0.5rem',
+                                borderRadius: '10px',
+                                fontSize: '0.75rem',
+                                fontWeight: '700',
+                                minWidth: '20px',
+                                textAlign: 'center'
+                              }}>
+                                {container.hazards.length}
+                              </span>
                             </div>
                           </div>
-                        )}
+                        </div>
 
-                        <div style={{ marginTop: '1.5rem', padding: '1rem', background: '#f9f9f9', borderRadius: '8px' }}>
-                          <h4>{authState.user?.role === 'hod' ? 'HOD Actions:' : 'Admin Actions:'}</h4>
-                          <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', flexWrap: 'wrap' }}>
+                        {/* Approval Actions Footer */}
+                        <div style={{
+                          paddingTop: '1rem',
+                          borderTop: '1px solid var(--kinross-light-gray)',
+                          marginTop: 'auto'
+                        }}>
+                          <div style={{
+                            display: 'flex',
+                            gap: '0.5rem',
+                            marginBottom: '0.75rem'
+                          }}>
                             <button
-                              onClick={() => setApprovalModal({ 
-                                isOpen: true, 
-                                type: 'approve', 
-                                containerId: container.id 
-                              })}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setApprovalModal({ 
+                                  isOpen: true, 
+                                  type: 'approve', 
+                                  containerId: container.id 
+                                });
+                              }}
                               style={{
-                                padding: '0.75rem 1.5rem',
+                                flex: 1,
+                                padding: '0.5rem',
                                 background: '#4caf50',
                                 color: 'white',
                                 border: 'none',
-                                borderRadius: '6px',
+                                borderRadius: '4px',
                                 cursor: 'pointer',
-                                fontWeight: '600'
+                                fontWeight: '600',
+                                fontSize: '0.8rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '0.25rem'
                               }}
                             >
-                              ✅ Approve
+                              <span>✅</span>
+                              <span>Approve</span>
                             </button>
                             <button
-                              onClick={() => setApprovalModal({ 
-                                isOpen: true, 
-                                type: 'reject', 
-                                containerId: container.id 
-                              })}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setApprovalModal({ 
+                                  isOpen: true, 
+                                  type: 'reject', 
+                                  containerId: container.id 
+                                });
+                              }}
                               style={{
-                                padding: '0.75rem 1.5rem',
+                                flex: 1,
+                                padding: '0.5rem',
                                 background: '#f44336',
                                 color: 'white',
                                 border: 'none',
-                                borderRadius: '6px',
+                                borderRadius: '4px',
                                 cursor: 'pointer',
-                                fontWeight: '600'
+                                fontWeight: '600',
+                                fontSize: '0.8rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '0.25rem'
                               }}
                             >
-                              ❌ Reject
+                              <span>❌</span>
+                              <span>Reject</span>
                             </button>
+                          </div>
+
+                          <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                          }}>
+                            <div style={{
+                              fontSize: '0.75rem',
+                              color: 'var(--kinross-dark-gray)',
+                              fontStyle: 'italic'
+                            }}>
+                              Click to view details
+                            </div>
+                            
                             <button
-                              onClick={() => deleteContainer(container.id, container.container)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteContainer(container.id, container.container);
+                              }}
                               style={{
-                                padding: '0.75rem 1.5rem',
+                                padding: '0.25rem 0.5rem',
                                 background: '#9e9e9e',
                                 color: 'white',
                                 border: 'none',
-                                borderRadius: '6px',
+                                borderRadius: '4px',
                                 cursor: 'pointer',
+                                fontSize: '0.7rem',
                                 fontWeight: '600'
                               }}
+                              title="Delete Container"
                             >
-                              🗑️ Delete
+                              🗑️
                             </button>
                           </div>
                         </div>
+
+                        {/* Urgent Badge for old pending items */}
+                        {(() => {
+                          const daysSinceSubmitted = Math.floor(
+                            (new Date().getTime() - new Date(container.submitted_at).getTime()) / (1000 * 60 * 60 * 24)
+                          );
+                          if (daysSinceSubmitted > 3) {
+                            return (
+                              <div style={{
+                                position: 'absolute',
+                                top: '0.5rem',
+                                right: '0.5rem',
+                                background: '#f44336',
+                                color: 'white',
+                                padding: '0.15rem 0.4rem',
+                                borderRadius: '10px',
+                                fontSize: '0.65rem',
+                                fontWeight: '700',
+                                boxShadow: '0 2px 4px rgba(244, 67, 54, 0.3)'
+                              }}>
+                                {daysSinceSubmitted}d
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
                       </div>
                     ))
                   )}
@@ -5791,7 +5971,10 @@ function App() {
           {/* Container Detail Modal */}
           {containerModalOpen && (
             <ContainerDetailModal
-              container={containers.find(c => c.id === containerModalOpen) || null}
+              container={
+                // Check both regular containers and pending containers
+                [...containers, ...pendingContainers].find(c => c.id === containerModalOpen) || null
+              }
               isOpen={containerModalOpen !== null}
               onClose={closeContainerModal}
               hazardCategories={hazardCategories}
