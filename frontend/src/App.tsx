@@ -3909,14 +3909,14 @@ function App() {
                       gridColumn: '1 / -1',
                       marginTop: '1.5rem',
                       padding: '2rem',
-                      background: 'linear-gradient(135deg, var(--kinross-navy) 0%, var(--kinross-dark-navy) 100%)',
+                      background: 'linear-gradient(135deg, var(--kinross-gold) 0%, var(--kinross-dark-gold) 100%)',
                       borderRadius: '12px',
-                      boxShadow: '0 4px 20px rgba(30, 58, 95, 0.15)',
-                      border: '2px solid var(--kinross-gold)'
+                      boxShadow: '0 4px 20px rgba(212, 165, 83, 0.2)',
+                      border: '2px solid var(--kinross-navy)'
                     }}>
                       <h3 style={{
                         margin: '0 0 1.5rem 0',
-                        color: 'white',
+                        color: 'var(--kinross-navy)',
                         fontSize: '1.3rem',
                         fontWeight: '700',
                         display: 'flex',
@@ -4246,7 +4246,7 @@ function App() {
                         marginTop: '1.25rem',
                         marginBottom: 0,
                         fontSize: '0.9rem',
-                        color: 'var(--kinross-gold)',
+                        color: 'var(--kinross-navy)',
                         fontStyle: 'italic',
                         fontWeight: '600',
                         textAlign: 'center'
