@@ -2063,13 +2063,13 @@ const ContainerDetailModal: React.FC<{
                       </div>
                       
                       <a 
-                        href={`http://localhost:8000${attachment.file_path}`}
+                        href={`${API_BASE}${attachment.file_path}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         style={{ textDecoration: 'none' }}
                       >
                         <img 
-                          src={`http://localhost:8000${attachment.file_path}`}
+                          src={`${API_BASE}${attachment.file_path}`}
                           alt={`${photoType} view`}
                           style={{
                             width: '100%',
