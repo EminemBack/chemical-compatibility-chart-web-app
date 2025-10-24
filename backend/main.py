@@ -4,7 +4,7 @@ Updated Chemical Container Safety Assessment API
 With PostgreSQL database support and Docker containerization
 """
 
-from fastapi import FastAPI, HTTPException, Depends, Header
+from fastapi import FastAPI, HTTPException, Depends, Header, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -15,6 +15,8 @@ import os
 import json
 from pathlib import Path
 import structlog
+import shutil
+import uuid
 
 # handling auth
 import redis
@@ -68,9 +70,14 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "") )
 
 # Create uploads directory for hazard logos
 Path("uploads/hazard").mkdir(parents=True, exist_ok=True)
+Path("uploads/containers").mkdir(parents=True, exist_ok=True) # For container attachments
 
 # Detect production mode
 PRODUCTION = os.getenv("PRODUCTION", "false").lower() == "true"
+
+# File upload settings
+ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'png'}
+MAX_FILE_SIZE = 1 * 1024 * 1024  # 1MB
 
 # FastAPI app
 app = FastAPI(
@@ -122,6 +129,24 @@ class ContainerSubmission(BaseModel):
     # approval_comment: Optional[str]
     # approved_by: Optional[str]
     # approved_at: Optional[datetime]
+
+class AttachmentInfo(BaseModel):
+    id: int
+    photo_type: str
+    file_path: str
+    file_name: str
+    uploaded_at: datetime
+
+class ContainerWithAttachments(BaseModel):
+    id: int
+    department: str
+    location: str
+    submitted_by: str
+    container: str
+    container_type: str
+    status: str
+    submitted_at: datetime
+    attachments: List[AttachmentInfo] = []
 
 class User(BaseModel):
     id: int
@@ -702,6 +727,56 @@ Kinross Chemical Safety System (Automated Notification)
     except Exception as e:
         logger.error("Failed to send HOD notification", error=str(e))
 
+def validate_image_file(file: UploadFile) -> bool:
+    """Validate uploaded image file"""
+    # Check file extension
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No filename provided")
+    
+    ext = file.filename.rsplit('.', 1)[-1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Invalid file type. Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
+        )
+    
+    # Check content type
+    if not file.content_type or not file.content_type.startswith('image/'):
+        raise HTTPException(status_code=400, detail="File must be an image")
+    
+    return True
+
+async def save_attachment_file(file: UploadFile, container_id: int, photo_type: str) -> tuple:
+    """Save uploaded file and return (file_path, file_name, file_size)"""
+    validate_image_file(file)
+    
+    # Create directory for this container
+    container_dir = Path(f"uploads/containers/{container_id}")
+    container_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Generate unique filename
+    ext = file.filename.rsplit('.', 1)[-1].lower()
+    unique_filename = f"{photo_type}_{uuid.uuid4().hex[:8]}.{ext}"
+    file_path = container_dir / unique_filename
+    
+    # Save file
+    file_size = 0
+    with file_path.open("wb") as buffer:
+        content = await file.read()
+        file_size = len(content)
+        
+        if file_size > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"File too large. Max size: {MAX_FILE_SIZE // (1024*1024)}MB"
+            )
+        
+        buffer.write(content)
+    
+    # Return relative path for database
+    relative_path = f"/uploads/containers/{container_id}/{unique_filename}"
+    return relative_path, file.filename, file_size
+
 def create_access_token(data: dict, expires_delta: timedelta = None):
     """Create JWT access token"""
     to_encode = data.copy()
@@ -973,6 +1048,156 @@ async def get_containers(authorization: str = Header(None)):
     except Exception as e:
         logger.error("Error fetching containers", error=str(e))
         raise HTTPException(status_code=500, detail=f"Error fetching containers: {str(e)}")
+
+# Attachment Routes
+@app.post("/containers/{container_id}/attachments")
+async def upload_attachment(
+    container_id: int,
+    photo_type: str,
+    file: UploadFile = File(...),
+    authorization: str = Header(None)
+):
+    """Upload a single attachment photo for a container"""
+    # user = await get_current_user(authorization)
+    current_user = await get_current_user_from_token(authorization)
+    
+    # Validate photo_type
+    valid_types = ['front', 'inside', 'side']
+    if photo_type not in valid_types:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Invalid photo_type. Must be one of: {', '.join(valid_types)}"
+        )
+    
+    pool = await get_db_pool()
+    async with pool.acquire() as conn:
+        # Check if container exists and user has permission
+        container = await conn.fetchrow(
+            "SELECT * FROM containers WHERE id = $1", container_id
+        )
+        
+        if not container:
+            raise HTTPException(status_code=404, detail="Container not found")
+        
+        # Check permission: only container owner, HOD, or admin can upload
+        if current_user['role'] not in ['hod', 'admin'] and container['submitted_by'] != current_user['name']:
+            raise HTTPException(status_code=403, detail="Not authorized to upload attachments")
+        
+        # Save file
+        file_path, file_name, file_size = await save_attachment_file(file, container_id, photo_type)
+        
+        # Delete old attachment of same type if exists
+        await conn.execute(
+            "DELETE FROM container_attachments WHERE container_id = $1 AND photo_type = $2",
+            container_id, photo_type
+        )
+        
+        # Insert new attachment record
+        attachment = await conn.fetchrow("""
+            INSERT INTO container_attachments 
+            (container_id, photo_type, file_path, file_name, file_size, uploaded_by)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING id, photo_type, file_path, file_name, uploaded_at
+        """, container_id, photo_type, file_path, file_name, file_size, current_user['name'])
+        
+        return {
+            "success": True,
+            "attachment": {
+                "id": attachment['id'],
+                "photo_type": attachment['photo_type'],
+                "file_path": attachment['file_path'],
+                "file_name": attachment['file_name'],
+                "uploaded_at": attachment['uploaded_at'].isoformat()
+            }
+        }
+
+@app.get("/containers/{container_id}/attachments")
+async def get_attachments(
+    container_id: int,
+    authorization: str = Header(None)
+):
+    """Get all attachments for a container"""
+    # user = await get_current_user(authorization)
+    current_user = await get_current_user_from_token(authorization)
+    
+    pool = await get_db_pool()
+    async with pool.acquire() as conn:
+        # Check if container exists
+        container = await conn.fetchrow(
+            "SELECT * FROM containers WHERE id = $1", container_id
+        )
+        
+        if not container:
+            raise HTTPException(status_code=404, detail="Container not found")
+        
+        # Get attachments
+        attachments = await conn.fetch("""
+            SELECT id, photo_type, file_path, file_name, file_size, uploaded_by, uploaded_at
+            FROM container_attachments
+            WHERE container_id = $1
+            ORDER BY photo_type
+        """, container_id)
+        
+        return {
+            "container_id": container_id,
+            "attachments": [
+                {
+                    "id": att['id'],
+                    "photo_type": att['photo_type'],
+                    "file_path": att['file_path'],
+                    "file_name": att['file_name'],
+                    "file_size": att['file_size'],
+                    "uploaded_by": att['uploaded_by'],
+                    "uploaded_at": att['uploaded_at'].isoformat()
+                }
+                for att in attachments
+            ]
+        }
+
+@app.delete("/containers/{container_id}/attachments/{photo_type}")
+async def delete_attachment(
+    container_id: int,
+    photo_type: str,
+    authorization: str = Header(None)
+):
+    """Delete a specific attachment"""
+    # user = await get_current_user(authorization)
+    current_user = await get_current_user_from_token(authorization)
+    
+    pool = await get_db_pool()
+    async with pool.acquire() as conn:
+        # Check permission
+        container = await conn.fetchrow(
+            "SELECT * FROM containers WHERE id = $1", container_id
+        )
+        
+        if not container:
+            raise HTTPException(status_code=404, detail="Container not found")
+        
+        if current_user['role'] not in ['hod', 'admin'] and container['submitted_by'] != current_user['name']:
+            raise HTTPException(status_code=403, detail="Not authorized")
+        
+        # Get attachment to delete file
+        attachment = await conn.fetchrow(
+            "SELECT file_path FROM container_attachments WHERE container_id = $1 AND photo_type = $2",
+            container_id, photo_type
+        )
+        
+        if not attachment:
+            raise HTTPException(status_code=404, detail="Attachment not found")
+        
+        # Delete file from filesystem
+        file_path = Path(attachment['file_path'].lstrip('/'))
+        if file_path.exists():
+            file_path.unlink()
+        
+        # Delete from database
+        await conn.execute(
+            "DELETE FROM container_attachments WHERE container_id = $1 AND photo_type = $2",
+            container_id, photo_type
+        )
+        
+        return {"success": True, "message": "Attachment deleted"}
 
 @app.get("/container-pdf/{container_id}")
 async def download_container_pdf(container_id: int):

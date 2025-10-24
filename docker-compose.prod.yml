@@ -51,6 +51,9 @@ services:
       - PRODUCTION=true
     ports:
       - "8000:8000"
+    volumes:
+      - ./backend/uploads:/app/uploads
+      - ./backend/logs:/app/logs
     depends_on:
       - postgres
       - redis
