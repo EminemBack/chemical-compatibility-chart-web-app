@@ -2469,41 +2469,41 @@ input[type="checkbox"]:checked {
 /* Notification Badge */
 .notification-badge {
   position: absolute;
-  top: 8px;                     /* pin to top */
-  right: -20px;                  /* pin to right */
-  transform: translate(0, 0);   /* ensure no accidental offset */
+  top: 0;
+  right: 0;
+  transform: translate(50%, -50%);
   background: linear-gradient(135deg, #F44336, #D32F2F);
   color: white;
-  width: 18px;
-  height: 18px;
+  width: 20px;              /* UPDATED from 18px */
+  height: 20px;             /* UPDATED from 18px */
   padding: 0;
-  font-size: 0.65rem;
+  font-size: 0.8rem;        /* UPDATED from 0.65rem for bigger badge */
   font-weight: 700;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
   box-shadow: 0 2px 6px rgba(244, 67, 54, 0.35);
-  z-index: 9999;                /* ensure it sits above pseudo elements */
-  border: 2px solid white;
+  z-index: 9999;
+  border: 3px solid white;  /* UPDATED from 2px for bigger badge */
   line-height: 1;
 }
 
 @keyframes badgePulse {
   0%, 100% {
-    transform: scale(1);
+    transform: translate(50%, -50%) scale(1);
     box-shadow: 0 2px 8px rgba(244, 67, 54, 0.4);
   }
   50% {
-    transform: scale(1.1);
+    transform: translate(50%, -50%) scale(1.1);
     box-shadow: 0 4px 12px rgba(244, 67, 54, 0.6);
   }
 }
 
 /* Update nav button to support badge positioning */
 .app-header nav button {
-  position: relative; /* Add this to existing styles */
-  overflow: hidden;
+  position: relative;
+  overflow: hidden; /* CHANGE from hidden to visible */
 }
 
 /* Add these animations at the end of App.css */
