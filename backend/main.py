@@ -1779,92 +1779,117 @@ async def update_container(
                 detail="Only containers requiring rework can be updated"
             )
         
-        async with conn.transaction():
-            # Update container - reset to pending status
-            await conn.execute("""
-                UPDATE containers 
-                SET department = $1,
-                    location = $2,
-                    container_type = $3,
-                    whatsapp_number = $4,
-                    status = 'pending',
-                    rework_reason = NULL,
-                    reworked_by = NULL,
-                    reworked_at = NULL
-                WHERE id = $5
-            """, 
-            container_data.department,
-            container_data.location,
-            container_data.container_type,
-            container_data.whatsapp_number,
-            container_id)
-            
-            # Delete old hazards
-            await conn.execute(
-                "DELETE FROM container_hazards WHERE container_id = $1",
-                container_id
-            )
-            
-            # Insert new hazards
-            for hazard_id in container_data.selected_hazards:
-                await conn.execute("""
-                    INSERT INTO container_hazards (container_id, hazard_category_id)
-                    VALUES ($1, $2)
-                """, container_id, hazard_id)
-            
-            # Delete old pairs
-            await conn.execute(
-                "DELETE FROM hazard_pairs WHERE container_id = $1",
-                container_id
-            )
-            
-            # Insert new pairs
-            for pair in container_data.hazard_pairs:
-                await conn.execute("""
-                    INSERT INTO hazard_pairs 
-                    (container_id, hazard_category_a_id, hazard_category_b_id, distance)
-                    VALUES ($1, $2, $3, $4)
-                """, container_id, pair.hazard_category_a_id, 
-                pair.hazard_category_b_id, pair.distance)
-        
-        # Send notification to admin/HOD that container was resubmitted
         try:
-            # Get admin/HOD emails
-            admin_users = await conn.fetch(
-                "SELECT email FROM users WHERE role IN ('admin', 'hod') AND active = true"
-            )
+            async with conn.transaction():
+                # Update container - reset to pending status
+                await conn.execute("""
+                    UPDATE containers 
+                    SET department = $1,
+                        location = $2,
+                        container_type = $3,
+                        whatsapp_number = $4,
+                        status = 'pending',
+                        rework_reason = NULL,
+                        reworked_by = NULL,
+                        reworked_at = NULL
+                    WHERE id = $5
+                """, 
+                container_data.department,
+                container_data.location,
+                container_data.container_type,
+                container_data.whatsapp_number,
+                container_id)
+                
+                # Delete old hazards
+                await conn.execute(
+                    "DELETE FROM container_hazards WHERE container_id = $1",
+                    container_id
+                )
+                
+                # Insert new hazards
+                for hazard_id in container_data.selected_hazards:
+                    await conn.execute("""
+                        INSERT INTO container_hazards (container_id, hazard_category_id)
+                        VALUES ($1, $2)
+                    """, container_id, hazard_id)
+                
+                # Delete old pairs
+                await conn.execute(
+                    "DELETE FROM hazard_pairs WHERE container_id = $1",
+                    container_id
+                )
+                
+                # Insert new pairs with status calculation (same as submit_container)
+                if container_data.hazard_pairs:
+                    for pair_data in container_data.hazard_pairs:
+                        # Get hazard category names for status calculation
+                        hazard_a_row = await conn.fetchrow(
+                            "SELECT name FROM hazard_categories WHERE id = $1", 
+                            pair_data.hazard_category_a_id
+                        )
+                        
+                        hazard_b_row = await conn.fetchrow(
+                            "SELECT name FROM hazard_categories WHERE id = $1", 
+                            pair_data.hazard_category_b_id
+                        )
+                        
+                        if not hazard_a_row or not hazard_b_row:
+                            raise HTTPException(status_code=400, detail=f"Invalid hazard category ID")
+                        
+                        # Calculate status, isolation, and minimum distance
+                        status, is_isolated, min_required_distance = calculate_hazard_status(
+                            hazard_a_row['name'], 
+                            hazard_b_row['name'], 
+                            pair_data.distance
+                        )
+                        
+                        # Handle infinity distance
+                        min_dist_value = None if min_required_distance == float('inf') else min_required_distance
+                        
+                        await conn.execute("""
+                            INSERT INTO hazard_pairs (container_id, hazard_category_a_id, hazard_category_b_id, 
+                                                    distance, is_isolated, min_required_distance, status)
+                            VALUES ($1, $2, $3, $4, $5, $6, $7)
+                        """, container_id, pair_data.hazard_category_a_id, pair_data.hazard_category_b_id, 
+                             pair_data.distance, is_isolated, min_dist_value, status)
+
+            # Build email data structure
+            await send_email(
+                to_email=SAFETY_TEAM_EMAIL,
+                subject=f"🔄 Container Resubmitted - {existing['container']}",
+                body=f"""
+                <h2>Container Has Been Resubmitted After Rework</h2>
+                <p>A container that required rework has been updated and resubmitted for approval.</p>
+                
+                <h3>Container Details:</h3>
+                <ul>
+                    <li><strong>Container ID:</strong> {existing['container']}</li>
+                    <li><strong>Department:</strong> {container_data.department}</li>
+                    <li><strong>Location:</strong> {container_data.location}</li>
+                    <li><strong>Resubmitted by:</strong> {user['name']}</li>
+                    <li><strong>Rework Count:</strong> {existing['rework_count'] or 0}</li>
+                </ul>
+                
+                <p>Please log in to review the updated submission.</p>
+                
+                <p>Best regards,<br>Kinross Safety System</p>
+                """
+            )            
             
-            for admin in admin_users:
-                if admin['email']:
-                    await send_email(
-                        to_email=admin['email'],
-                        subject=f"🔄 Container Resubmitted - {existing['container']}",
-                        body=f"""
-                        <h2>Container Has Been Resubmitted After Rework</h2>
-                        <p>A container that required rework has been updated and resubmitted for approval.</p>
-                        
-                        <h3>Container Details:</h3>
-                        <ul>
-                            <li><strong>Container ID:</strong> {existing['container']}</li>
-                            <li><strong>Department:</strong> {container_data.department}</li>
-                            <li><strong>Location:</strong> {container_data.location}</li>
-                            <li><strong>Resubmitted by:</strong> {user['name']}</li>
-                            <li><strong>Rework Count:</strong> {existing['rework_count'] or 0}</li>
-                        </ul>
-                        
-                        <p>Please log in to review the updated submission.</p>
-                        
-                        <p>Best regards,<br>Kinross Safety System</p>
-                        """
-                    )
+            logger.info("Container updated and resubmitted", 
+                       container_id=container_id,
+                       user=user['name'],
+                       rework_count=existing['rework_count'])
+            
+            return {
+                "success": True,
+                "message": "Container updated and resubmitted for approval",
+                "container_id": container_id
+            }
+            
         except Exception as e:
-            print(f"Failed to send resubmission notification: {e}")
-        
-        return {
-            "success": True,
-            "message": "Container updated and resubmitted for approval",
-            "container_id": container_id
-        }
+            logger.error("Error updating container", error=str(e), container_id=container_id)
+            raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 # Delete Containers Endpoint
 @app.delete("/containers/{container_id}")

@@ -2356,9 +2356,9 @@ function App() {
 
   // Attachment uploads
   const [attachments, setAttachments] = useState<{
-    front: File | null;
-    inside: File | null;
-    side: File | null;
+    front: File | null | 'existing';
+    inside: File | null | 'existing';
+    side: File | null | 'existing';
   }>({ front: null, inside: null, side: null });
 
   const [attachmentPreviews, setAttachmentPreviews] = useState<{
@@ -3178,10 +3178,19 @@ function App() {
       return;
     }
 
-    // Validate attachments - all 3 photos are required
-    if (!attachments.front || !attachments.inside || !attachments.side) {
-      alert('⚠️ Please upload all 3 container photos (Front, Inside, and Side views)');
-      return;
+    // Validate attachments - all 3 photos are required (or existing in edit mode)
+    if (!isEditMode) {
+      // New submission - require all 3 photos
+      if (!attachments.front || !attachments.inside || !attachments.side) {
+        alert('⚠️ Please upload all 3 container photos (Front, Inside, and Side views)');
+        return;
+      }
+    } else {
+      // Edit mode - check if we have previews (existing or new)
+      if (!attachmentPreviews.front || !attachmentPreviews.inside || !attachmentPreviews.side) {
+        alert('⚠️ All 3 container photos are required. Please upload any missing photos.');
+        return;
+      }
     }
     
     if (selectedHazards.length === 0) {
@@ -3329,13 +3338,19 @@ function App() {
       }
 
       if (response.ok) {
-        const result = await response.json();
+        // const result = await response.json();
 
-        // Upload attachments if any were changed
-        if (attachments.front || attachments.inside || attachments.side) {
+        // Upload only NEW attachments (skip existing ones)
+        const hasNewAttachments = (
+          (attachments.front && attachments.front !== 'existing') ||
+          (attachments.inside && attachments.inside !== 'existing') ||
+          (attachments.side && attachments.side !== 'existing')
+        );
+        
+        if (hasNewAttachments) {
           const uploadSuccess = await uploadAttachments(containerId);
           if (!uploadSuccess) {
-            alert('Container updated but some attachments failed to upload.');
+            alert('Container updated but some new attachments failed to upload.');
           }
         }
 
@@ -3395,13 +3410,19 @@ function App() {
     }
   };
 
-  const handleAttachmentChange = (photoType: 'front' | 'inside' | 'side', file: File | null) => {
+  const handleAttachmentChange = (photoType: 'front' | 'inside' | 'side', file: File | null | 'existing') => {
     if (!file) {
       setAttachments(prev => ({ ...prev, [photoType]: null }));
       setAttachmentPreviews(prev => ({ ...prev, [photoType]: null }));
       return;
     }
 
+    // If it's 'existing', just keep it as is (don't process)
+    if (file === 'existing') {
+      return;
+    }
+
+    // Now TypeScript knows file is a File object
     // Validate file
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
     if (!validTypes.includes(file.type)) {
@@ -3431,7 +3452,9 @@ function App() {
 
     for (const photoType of photoTypes) {
       const file = attachments[photoType];
-      if (!file) continue;
+      
+      // Skip if it's an existing attachment (not a new File object)
+      if (!file || file === 'existing') continue;
 
       const formData = new FormData();
       formData.append('file', file);
@@ -3455,12 +3478,12 @@ function App() {
     try {
       const responses = await Promise.all(uploadPromises);
       const allSuccess = responses.every(r => r.ok);
-      
+
       if (!allSuccess) {
         console.error('Some attachments failed to upload');
         return false;
       }
-      
+
       return true;
     } catch (error) {
       console.error('Error uploading attachments:', error);
@@ -3507,6 +3530,9 @@ function App() {
         }));
         setHazardPairs(pairs);
         
+        // Load existing attachments
+        await loadExistingAttachments(containerId);
+        
         // Set edit mode
         setEditingContainerId(containerId);
         setIsEditMode(true);
@@ -3517,6 +3543,49 @@ function App() {
     } catch (error) {
       console.error('Error loading container:', error);
       alert('Failed to load container for editing');
+    }
+  };
+
+  const loadExistingAttachments = async (containerId: number) => {
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(`${API_BASE}/containers/${containerId}/attachments`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const attachmentsData = data.attachments || [];
+        
+        // Create preview URLs from existing attachments
+        const previews: {
+          front: string | null;
+          inside: string | null;
+          side: string | null;
+        } = { front: null, inside: null, side: null };
+        
+        attachmentsData.forEach((att: any) => {
+          if (att.photo_type === 'front' || att.photo_type === 'inside' || att.photo_type === 'side') {
+            previews[att.photo_type as 'front' | 'inside' | 'side'] = `http://localhost:8000${att.file_path}`;
+          }
+        });
+        
+        setAttachmentPreviews(previews);
+        
+        // Note: We can't set actual File objects since they're already uploaded
+        // User will need to re-upload if they want to change them
+        // Set a flag to indicate these are existing attachments
+        setAttachments({
+          front: previews.front ? 'existing' as any : null,
+          inside: previews.inside ? 'existing' as any : null,
+          side: previews.side ? 'existing' as any : null
+        });
+      }
+    } catch (error) {
+      console.error('Error loading attachments:', error);
+      // Don't alert - attachments are optional
     }
   };
 
