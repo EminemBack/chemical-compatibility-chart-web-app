@@ -3568,7 +3568,7 @@ function App() {
         
         attachmentsData.forEach((att: any) => {
           if (att.photo_type === 'front' || att.photo_type === 'inside' || att.photo_type === 'side') {
-            previews[att.photo_type as 'front' | 'inside' | 'side'] = `http://localhost:8000${att.file_path}`;
+            previews[att.photo_type as 'front' | 'inside' | 'side'] = `${API_BASE}${att.file_path}`;
           }
         });
         
