@@ -32,6 +32,10 @@ interface ContainerData {
   approval_comment?: string;
   approved_by?: string;
   approved_at?: string;
+  rework_reason?: string;        // field for rework reason
+  rework_count?: number;          // field for rework reason
+  reworked_by?: string;           // field for rework reason
+  reworked_at?: string;           // field for rework reason
   hazards: Array<{name: string, hazard_class: string}>;
   pairs: Array<{
     id: number;
@@ -1746,6 +1750,7 @@ const ContainerDetailModal: React.FC<{
         case 'approved': return { backgroundColor: '#e8f5e8', color: '#2e7d32', border: '2px solid #4caf50' };
         case 'rejected': return { backgroundColor: '#ffebee', color: '#c62828', border: '2px solid #f44336' };
         case 'pending': return { backgroundColor: '#fff3e0', color: '#f57c00', border: '2px solid #ff9800' };
+        case 'rework_requested': return { backgroundColor: '#fff3e0', color: '#e65100', border: '2px solid #ff9800' };
         default: return { backgroundColor: '#f5f5f5', color: '#666', border: '2px solid #ccc' };
       }
     };
@@ -1759,7 +1764,7 @@ const ContainerDetailModal: React.FC<{
         fontWeight: '700',
         textTransform: 'uppercase'
       }}>
-        {status}
+        {status === 'rework_requested' ? 'REWORK REQUIRED' : status}
       </span>
     );
   };
@@ -1852,6 +1857,44 @@ const ContainerDetailModal: React.FC<{
               <div><strong>Approved by:</strong> {container.approved_by}</div>
             )}
           </div>
+
+          {/* Rework Notice */}
+          {container.status === 'rework_requested' && container.rework_reason && (
+            <div style={{
+              marginBottom: '2rem',
+              padding: '1.5rem',
+              background: '#fff3e0',
+              borderRadius: '10px',
+              border: '2px solid #ff9800'
+            }}>
+              <h4 style={{ 
+                margin: '0 0 1rem 0', 
+                color: '#e65100',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem'
+              }}>
+                <span style={{ fontSize: '1.3rem' }}>↩️</span>
+                Rework Required (Request #{container.rework_count || 1})
+              </h4>
+              <p style={{ margin: '0 0 1rem 0', fontWeight: '600', color: '#f57c00' }}>
+                Reviewed by: {container.reworked_by}
+              </p>
+              <p style={{ margin: 0, fontStyle: 'italic', color: '#e65100', lineHeight: '1.6' }}>
+                {container.rework_reason}
+              </p>
+              <div style={{
+                marginTop: '1rem',
+                padding: '1rem',
+                background: '#ffe0b2',
+                borderRadius: '6px',
+                fontSize: '0.9rem',
+                color: '#e65100'
+              }}>
+                ⚠️ <strong>Action Required:</strong> Please review the feedback above and resubmit your assessment with the requested changes.
+              </div>
+            </div>
+          )}
 
           {/* Approval Comments */}
           {container.approval_comment && (
@@ -2219,6 +2262,16 @@ function App() {
 
   const [showAdminReviewModal, setShowAdminReviewModal] = useState(false);
   const [selectedRequestForReview, setSelectedRequestForReview] = useState<DeletionRequest | null>(null);
+
+  const [reworkModal, setReworkModal] = useState<{ isOpen: boolean; containerId: number }>({
+    isOpen: false,
+    containerId: 0
+  });
+  const [reworkReason, setReworkReason] = useState('');
+
+  // EDIT MODAL STATES
+  const [editingContainerId, setEditingContainerId] = useState<number | null>(null);
+  const [isEditMode, setIsEditMode] = useState(false);
 
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [submittedContainerName, setSubmittedContainerName] = useState('');
@@ -2959,7 +3012,45 @@ function App() {
       console.error('Error in HOD decision:', error);
       alert('❌ Error processing decision. Please try again.');
     }
-  };  
+  };
+
+  const requestRework = async (containerId: number, reason: string) => {
+    if (!reason || reason.trim().length < 10) {
+      alert('⚠️ Rework reason must be at least 10 characters long');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(`${API_BASE}/containers/${containerId}/rework`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          container_id: containerId,
+          rework_reason: reason.trim()
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        alert(`✅ ${data.message}`);
+        setReworkModal({ isOpen: false, containerId: 0 });
+        setReworkReason('');
+        fetchPendingContainers();
+        fetchContainers();
+        fetchPendingApprovalsCount();
+      } else {
+        const error = await response.json();
+        alert(`❌ Error: ${error.detail}`);
+      }
+    } catch (error) {
+      console.error('Error requesting rework:', error);
+      alert('❌ Error sending rework request. Please try again.');
+    }
+  };
 
   const fetchAnalyticsData = async () => {
     setAnalyticsLoading(true);
@@ -3092,6 +3183,12 @@ function App() {
 
     setLoading(true);
 
+    // Check if we're updating an existing container (rework)
+    if (isEditMode && editingContainerId) {
+      await updateContainer(editingContainerId);
+      return;
+    }    
+
     const payload = {
       department,
       location,
@@ -3170,6 +3267,76 @@ function App() {
     } catch (error) {
       console.error('Error submitting container:', error);
       alert('Error submitting container data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateContainer = async (containerId: number) => {
+    const payload = {
+      department,
+      location,
+      submitted_by: authState.user?.name || '',
+      whatsapp_number: whatsappNumber,
+      container,
+      container_type: containerType,
+      selected_hazards: selectedHazards.map(h => h.id),
+      hazard_pairs: hazardPairs
+    };
+
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(`${API_BASE}/containers/${containerId}/update`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.text();
+        console.error('Backend error:', errorData);
+        throw new Error(`Server error: ${response.status}`);
+      }
+
+      if (response.ok) {
+        const result = await response.json();
+
+        // Upload attachments if any were changed
+        if (attachments.front || attachments.inside || attachments.side) {
+          const uploadSuccess = await uploadAttachments(containerId);
+          if (!uploadSuccess) {
+            alert('Container updated but some attachments failed to upload.');
+          }
+        }
+
+        alert(`✅ Container resubmitted successfully! It will be reviewed again.`);
+
+        // Reset form
+        setDepartment('');
+        setLocation('');
+        setContainer('');
+        setContainerType('');
+        setWhatsappNumber('');
+        setSelectedHazards([]);
+        setHazardPairs([]);
+        setPairStatuses({});
+        setConfirmationChecked(false);
+        setAttachments({ front: null, inside: null, side: null });
+        setAttachmentPreviews({ front: null, inside: null, side: null });
+        setUploadingAttachments(false);
+        setEditingContainerId(null);
+        setIsEditMode(false);
+
+        // Refresh containers list
+        fetchContainers();
+        setActiveTab('containers');
+      }
+    } catch (error) {
+      console.error('Error updating container:', error);
+      alert('❌ Error updating container data');
     } finally {
       setLoading(false);
     }
@@ -3274,167 +3441,152 @@ function App() {
     }
   };
 
+  const loadContainerForEdit = async (containerId: number) => {
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(`${API_BASE}/containers/`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const containers = await response.json();
+        const container = containers.find((c: ContainerData) => c.id === containerId);
+        
+        if (!container) {
+          alert('Container not found');
+          return;
+        }
+
+        // Load container data into form
+        setDepartment(container.department);
+        setLocation(container.location);
+        setContainer(container.container);
+        setContainerType(container.container_type);
+        setWhatsappNumber(container.whatsapp_number);
+        
+        // Load hazards
+        const hazardsToSelect = hazardCategories.filter(hc => 
+          container.hazards.some((h: any) => h.name === hc.name)
+        );
+        setSelectedHazards(hazardsToSelect);
+        
+        // Load pairs
+        const pairs = container.pairs.map((p: any) => ({
+          hazard_category_a_id: hazardCategories.find(h => h.name === p.hazard_a_name)?.id || 0,
+          hazard_category_b_id: hazardCategories.find(h => h.name === p.hazard_b_name)?.id || 0,
+          distance: p.distance
+        }));
+        setHazardPairs(pairs);
+        
+        // Set edit mode
+        setEditingContainerId(containerId);
+        setIsEditMode(true);
+        setActiveTab('form');
+        
+        alert(`✏️ Loaded container for editing. Please make your changes and resubmit.`);
+      }
+    } catch (error) {
+      console.error('Error loading container:', error);
+      alert('Failed to load container for editing');
+    }
+  };
+
   const AuthModal = () => (
-  <div style={{
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(30, 58, 95, 0.9)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 9999
-  }}>
     <div style={{
-      background: 'white',
-      borderRadius: '12px',
-      padding: '2rem',
-      width: '450px',
-      maxWidth: '90vw',
-      boxSizing: 'border-box',
-      boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(30, 58, 95, 0.9)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 9999
     }}>
-        {/* Logo Row */}
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '1.5rem',
-          paddingBottom: '1rem',
-          borderBottom: '2px solid var(--kinross-light-gray)'
-        }}>
-          <img 
-            src="/kinross-logo.png" 
-            alt="Kinross Gold Corporation" 
-            style={{
-              height: '50px',
-              objectFit: 'contain',
-              maxWidth: '45%'
-            }}
-          />
-          <img 
-            src="/safeground-logo.png" 
-            alt="Safeground" 
-            style={{
-              height: '40px',
-              objectFit: 'contain',
-              maxWidth: '45%'
-            }}
-          />
-        </div>
-
-        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <h2 style={{ color: 'var(--kinross-navy)', marginBottom: '0.5rem' }}>
-            Chemical Safety System
-          </h2>
-          <p style={{ color: 'var(--kinross-dark-gray)' }}>
-            Kinross Gold Corporation
-          </p>
-        </div>
-
-        {authStep === 'email' ? (
-          <div>
-            <label style={{ 
-                display: 'block', 
-                marginBottom: '0.875rem',      // ✅ Reduced from 1rem
-                fontWeight: '600',
-                fontSize: '0.95rem'            // ✅ Added
-            }}>
-              Corporate Email Address:
-              {/* // Fix for email input (in AuthModal) */}
-              <input
-                type="email"
-                value={authEmail}
-                onChange={(e) => setAuthEmail(e.target.value)}
-                placeholder="your.name@kinross.com"
-                style={{
-                  width: '100%',
-                  padding: '0.875rem',           // ✅ Reduced from 1rem
-                  marginTop: '0.5rem',
-                  border: '2px solid var(--kinross-medium-gray)',
-                  borderRadius: '6px',
-                  fontSize: '0.95rem',           // ✅ Reduced from 1rem
-                  boxSizing: 'border-box'        // ✅ Added for better sizing
-                }}
-                autoComplete="email"
-                autoFocus  // Add this line
-                onKeyPress={(e) => e.key === 'Enter' && authEmail && requestVerificationCode()}
-              />
-            </label>
-            <button
-              onClick={requestVerificationCode}
-              disabled={!authEmail || authLoading}
+      <div style={{
+        background: 'white',
+        borderRadius: '12px',
+        padding: '2rem',
+        width: '450px',
+        maxWidth: '90vw',
+        boxSizing: 'border-box',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+      }}>
+          {/* Logo Row */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '1.5rem',
+            paddingBottom: '1rem',
+            borderBottom: '2px solid var(--kinross-light-gray)'
+          }}>
+            <img 
+              src="/kinross-logo.png" 
+              alt="Kinross Gold Corporation" 
               style={{
-                width: '100%',
-                padding: '1rem',
-                background: 'var(--kinross-gold)',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                fontSize: '1rem',
-                fontWeight: '600',
-                cursor: authLoading ? 'not-allowed' : 'pointer',
-                opacity: authLoading ? 0.6 : 1
+                height: '50px',
+                objectFit: 'contain',
+                maxWidth: '45%'
               }}
-            >
-              {authLoading ? 'Sending...' : 'Send Verification Code'}
-            </button>
+            />
+            <img 
+              src="/safeground-logo.png" 
+              alt="Safeground" 
+              style={{
+                height: '40px',
+                objectFit: 'contain',
+                maxWidth: '45%'
+              }}
+            />
           </div>
-        ) : (
-          <div>
-            <p style={{ marginBottom: '1rem', textAlign: 'center' }}>
-              Enter the 6-digit code sent to:<br />
-              <strong>{authEmail}</strong>
+
+          <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+            <h2 style={{ color: 'var(--kinross-navy)', marginBottom: '0.5rem' }}>
+              Chemical Safety System
+            </h2>
+            <p style={{ color: 'var(--kinross-dark-gray)' }}>
+              Kinross Gold Corporation
             </p>
-            <label style={{ display: 'block', marginBottom: '1rem', fontWeight: '600' }}>
-              Verification Code:
-              <input
-                type="text"
-                value={authCode}
-                onChange={(e) => setAuthCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                placeholder="000000"
+          </div>
+
+          {authStep === 'email' ? (
+            <div>
+              <label style={{ 
+                  display: 'block', 
+                  marginBottom: '0.875rem',      // ✅ Reduced from 1rem
+                  fontWeight: '600',
+                  fontSize: '0.95rem'            // ✅ Added
+              }}>
+                Corporate Email Address:
+                {/* // Fix for email input (in AuthModal) */}
+                <input
+                  type="email"
+                  value={authEmail}
+                  onChange={(e) => setAuthEmail(e.target.value)}
+                  placeholder="your.name@kinross.com"
+                  style={{
+                    width: '100%',
+                    padding: '0.875rem',           // ✅ Reduced from 1rem
+                    marginTop: '0.5rem',
+                    border: '2px solid var(--kinross-medium-gray)',
+                    borderRadius: '6px',
+                    fontSize: '0.95rem',           // ✅ Reduced from 1rem
+                    boxSizing: 'border-box'        // ✅ Added for better sizing
+                  }}
+                  autoComplete="email"
+                  autoFocus  // Add this line
+                  onKeyPress={(e) => e.key === 'Enter' && authEmail && requestVerificationCode()}
+                />
+              </label>
+              <button
+                onClick={requestVerificationCode}
+                disabled={!authEmail || authLoading}
                 style={{
                   width: '100%',
-                  padding: '1rem',
-                  marginTop: '0.5rem',
-                  border: '2px solid var(--kinross-medium-gray)',
-                  borderRadius: '6px',
-                  fontSize: '1.5rem',
-                  textAlign: 'center',
-                  letterSpacing: '0.5rem',
-                  boxSizing: 'border-box'
-                }}
-                maxLength={6}
-                autoComplete="one-time-code"
-                autoFocus
-                onKeyPress={(e) => e.key === 'Enter' && authCode.length === 6 && verifyCode()}
-              />
-            </label>
-            <div style={{ display: 'flex', gap: '1rem' }}>
-              <button
-                onClick={() => {
-                  setAuthStep('email');
-                  setAuthCode('');
-                }}
-                style={{
-                  flex: 1,
-                  padding: '1rem',
-                  background: 'transparent',
-                  color: 'var(--kinross-navy)',
-                  border: '2px solid var(--kinross-medium-gray)',
-                  borderRadius: '6px',
-                  cursor: 'pointer'
-                }}
-              >
-                Back
-              </button>
-              <button
-                onClick={verifyCode}
-                disabled={authCode.length !== 6 || authLoading}
-                style={{
-                  flex: 2,
                   padding: '1rem',
                   background: 'var(--kinross-gold)',
                   color: 'white',
@@ -3442,17 +3594,84 @@ function App() {
                   borderRadius: '6px',
                   fontSize: '1rem',
                   fontWeight: '600',
-                  cursor: authCode.length !== 6 || authLoading ? 'not-allowed' : 'pointer',
-                  opacity: authCode.length !== 6 || authLoading ? 0.6 : 1
+                  cursor: authLoading ? 'not-allowed' : 'pointer',
+                  opacity: authLoading ? 0.6 : 1
                 }}
               >
-                {authLoading ? 'Verifying...' : 'Verify Code'}
+                {authLoading ? 'Sending...' : 'Send Verification Code'}
               </button>
             </div>
-          </div>
-        )}
+          ) : (
+            <div>
+              <p style={{ marginBottom: '1rem', textAlign: 'center' }}>
+                Enter the 6-digit code sent to:<br />
+                <strong>{authEmail}</strong>
+              </p>
+              <label style={{ display: 'block', marginBottom: '1rem', fontWeight: '600' }}>
+                Verification Code:
+                <input
+                  type="text"
+                  value={authCode}
+                  onChange={(e) => setAuthCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="000000"
+                  style={{
+                    width: '100%',
+                    padding: '1rem',
+                    marginTop: '0.5rem',
+                    border: '2px solid var(--kinross-medium-gray)',
+                    borderRadius: '6px',
+                    fontSize: '1.5rem',
+                    textAlign: 'center',
+                    letterSpacing: '0.5rem',
+                    boxSizing: 'border-box'
+                  }}
+                  maxLength={6}
+                  autoComplete="one-time-code"
+                  autoFocus
+                  onKeyPress={(e) => e.key === 'Enter' && authCode.length === 6 && verifyCode()}
+                />
+              </label>
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <button
+                  onClick={() => {
+                    setAuthStep('email');
+                    setAuthCode('');
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: '1rem',
+                    background: 'transparent',
+                    color: 'var(--kinross-navy)',
+                    border: '2px solid var(--kinross-medium-gray)',
+                    borderRadius: '6px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Back
+                </button>
+                <button
+                  onClick={verifyCode}
+                  disabled={authCode.length !== 6 || authLoading}
+                  style={{
+                    flex: 2,
+                    padding: '1rem',
+                    background: 'var(--kinross-gold)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontSize: '1rem',
+                    fontWeight: '600',
+                    cursor: authCode.length !== 6 || authLoading ? 'not-allowed' : 'pointer',
+                    opacity: authCode.length !== 6 || authLoading ? 0.6 : 1
+                  }}
+                >
+                  {authLoading ? 'Verifying...' : 'Verify Code'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
   );
 
   // Status Badge Component
@@ -3462,6 +3681,7 @@ function App() {
         case 'approved': return { backgroundColor: '#e8f5e8', color: '#2e7d32', border: '2px solid #4caf50' };
         case 'rejected': return { backgroundColor: '#ffebee', color: '#c62828', border: '2px solid #f44336' };
         case 'pending': return { backgroundColor: '#fff3e0', color: '#f57c00', border: '2px solid #ff9800' };
+        case 'rework_requested': return { backgroundColor: '#fff3e0', color: '#e65100', border: '2px solid #ff9800' };
         default: return { backgroundColor: '#f5f5f5', color: '#666', border: '2px solid #ccc' };
       }
     };
@@ -3475,7 +3695,7 @@ function App() {
         fontWeight: '700',
         textTransform: 'uppercase'
       }}>
-        {status}
+        {status === 'rework_requested' ? 'REWORK REQUIRED' : status}
       </span>
     );
   };
@@ -3891,8 +4111,24 @@ function App() {
             {activeTab === 'form' && (
               <div className="container-form-section">
                 <div className="form-header">
-                  <h2>Container Safety Assessment Form</h2>
-                  <p>Complete this form to assess chemical hazard compatibility for storage containers</p>
+                  <h2>
+                    {isEditMode ? '✏️ Edit Container Safety Assessment (Rework)' : 'Container Safety Assessment Form'}
+                  </h2>
+                  {isEditMode ? (
+                    <div style={{
+                      padding: '1rem',
+                      background: '#fff3e0',
+                      border: '2px solid #ff9800',
+                      borderRadius: '8px',
+                      marginTop: '1rem',
+                      color: '#e65100'
+                    }}>
+                      <strong>📝 Editing Mode:</strong> You are updating a container that requires rework. 
+                      Make your changes and click "Submit Safety Assessment" to resubmit for approval.
+                    </div>
+                  ) : (
+                    <p>Complete this form to assess chemical hazard compatibility for storage containers</p>
+                  )}
                 </div>
 
                 {/* Container Information */}
@@ -4047,42 +4283,45 @@ function App() {
                               backgroundColor: '#f5f5f5',
                               cursor: 'not-allowed',
                               color: department ? '#666' : '#999',
-                              fontSize: '0.85rem',             // ✅ ADD - smaller font
-                              fontWeight: '600',               // ✅ ADD - bold
-                              letterSpacing: '-0.02em',        // ✅ ADD - tighter spacing
-                              padding: '0.875rem',             // ✅ ADD - adjusted padding
-                              overflow: 'hidden',              // ✅ ADD
-                              textOverflow: 'ellipsis',        // ✅ ADD
-                              whiteSpace: 'nowrap'             // ✅ ADD
+                              fontSize: '0.85rem',
+                              fontWeight: '600',
+                              letterSpacing: '-0.02em',
+                              padding: '0.875rem',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap'
                             }}
                           />
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              if (!department) {
-                                alert('Please select a department first');
-                                return;
-                              }
-                              const newId = await generateContainerID(department);
-                              setContainer(newId);
-                            }}
-                            disabled={!department}
-                            style={{
-                              padding: '0.75rem 1rem',
-                              background: department ? 'var(--kinross-gold)' : '#ccc',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '6px',
-                              cursor: department ? 'pointer' : 'not-allowed',
-                              fontSize: '0.9rem',
-                              fontWeight: '600',
-                              whiteSpace: 'nowrap',
-                              opacity: department ? 1 : 0.6
-                            }}
-                            title={department ? 'Generate new container ID' : 'Select department first'}
-                          >
-                            🔄 Generate New
-                          </button>
+                          {/* Hide Generate button in edit mode */}
+                          {!isEditMode && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (!department) {
+                                  alert('Please select a department first');
+                                  return;
+                                }
+                                const newId = await generateContainerID(department);
+                                setContainer(newId);
+                              }}
+                              disabled={!department}
+                              style={{
+                                padding: '0.75rem 1rem',
+                                background: department ? 'var(--kinross-gold)' : '#ccc',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '6px',
+                                cursor: department ? 'pointer' : 'not-allowed',
+                                fontSize: '0.9rem',
+                                fontWeight: '600',
+                                whiteSpace: 'nowrap',
+                                opacity: department ? 1 : 0.6
+                              }}
+                              title={department ? 'Generate new container ID' : 'Select department first'}
+                            >
+                              🔄 Generate New
+                            </button>
+                          )}
                         </div>
                         <small style={{ 
                           color: 'var(--kinross-dark-gray)', 
@@ -4091,7 +4330,9 @@ function App() {
                           marginTop: '0.25rem',
                           display: 'block'
                         }}>
-                          {department 
+                          {isEditMode 
+                            ? '🔒 Container ID cannot be changed during editing'
+                            : department 
                             ? `Format: CONT-####-${DEPARTMENT_ABBREV[department]}` 
                             : 'Container ID will be generated after selecting department'
                           }
@@ -5030,6 +5271,39 @@ function App() {
                             borderTop: '1px solid var(--kinross-light-gray)',
                             marginTop: 'auto'
                           }}>
+                            {/* Edit Button for Rework Required */}
+                            {container.status === 'rework_requested' && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  loadContainerForEdit(container.id);
+                                }}
+                                style={{
+                                  padding: '0.5rem 1rem',
+                                  background: '#ff9800',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '6px',
+                                  cursor: 'pointer',
+                                  fontWeight: '600',
+                                  fontSize: '0.85rem',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '0.5rem',
+                                  transition: 'all 0.3s ease'
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.background = '#e65100';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.background = '#ff9800';
+                                }}
+                              >
+                                <span>✏️</span>
+                                <span>Edit & Resubmit</span>
+                              </button>
+                            )}
+                            
                             <div style={{
                               fontSize: '0.75rem',
                               color: 'var(--kinross-dark-gray)',
@@ -5378,6 +5652,33 @@ function App() {
                             >
                               <span>❌</span>
                               <span>Reject</span>
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setReworkModal({ 
+                                  isOpen: true, 
+                                  containerId: container.id 
+                                });
+                              }}
+                              style={{
+                                flex: 1,
+                                padding: '0.5rem',
+                                background: '#ff9800',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontWeight: '600',
+                                fontSize: '0.8rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '0.25rem'
+                              }}
+                            >
+                              <span>↩️</span>
+                              <span>Rework</span>
                             </button>
                           </div>
 
@@ -6367,6 +6668,136 @@ function App() {
             }}
             type={approvalModal.type}
           />
+
+          {/* Rework Request Modal */}
+          {reworkModal.isOpen && (
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(30, 58, 95, 0.8)',
+              backdropFilter: 'blur(5px)',
+              zIndex: 1000,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '1rem'
+            }} onClick={() => {
+              setReworkModal({ isOpen: false, containerId: 0 });
+              setReworkReason('');
+            }}>
+              <div style={{
+                background: 'white',
+                borderRadius: '12px',
+                maxWidth: '600px',
+                width: '100%',
+                padding: '2rem',
+                boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+                border: '3px solid #ff9800'
+              }} onClick={(e) => e.stopPropagation()}>
+                <h2 style={{
+                  margin: '0 0 1.5rem 0',
+                  color: '#e65100',
+                  fontSize: '1.5rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem'
+                }}>
+                  <span style={{ fontSize: '1.8rem' }}>↩️</span>
+                  Request Rework
+                </h2>
+
+                <p style={{
+                  margin: '0 0 1.5rem 0',
+                  color: 'var(--kinross-dark-gray)',
+                  fontSize: '1rem',
+                  lineHeight: '1.6'
+                }}>
+                  Send this container back to the submitter for modifications. Please provide clear instructions on what needs to be changed.
+                </p>
+
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <label style={{
+                    display: 'block',
+                    marginBottom: '0.75rem',
+                    fontWeight: '600',
+                    color: 'var(--kinross-navy)',
+                    fontSize: '1rem'
+                  }}>
+                    Rework Reason (Required) *
+                  </label>
+                  <textarea
+                    value={reworkReason}
+                    onChange={(e) => setReworkReason(e.target.value)}
+                    placeholder="Explain what needs to be corrected or improved..."
+                    style={{
+                      width: '100%',
+                      minHeight: '150px',
+                      padding: '1rem',
+                      border: '2px solid var(--kinross-medium-gray)',
+                      borderRadius: '6px',
+                      fontSize: '1rem',
+                      fontFamily: 'inherit',
+                      resize: 'vertical',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                  <small style={{
+                    display: 'block',
+                    marginTop: '0.5rem',
+                    color: 'var(--kinross-dark-gray)',
+                    fontSize: '0.85rem'
+                  }}>
+                    Minimum 10 characters. Be specific about what needs to change.
+                  </small>
+                </div>
+
+                <div style={{
+                  display: 'flex',
+                  gap: '1rem',
+                  justifyContent: 'flex-end'
+                }}>
+                  <button
+                    onClick={() => {
+                      setReworkModal({ isOpen: false, containerId: 0 });
+                      setReworkReason('');
+                    }}
+                    style={{
+                      padding: '0.75rem 1.5rem',
+                      background: '#9e9e9e',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '1rem',
+                      fontWeight: '600'
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => requestRework(reworkModal.containerId, reworkReason)}
+                    disabled={!reworkReason || reworkReason.trim().length < 10}
+                    style={{
+                      padding: '0.75rem 1.5rem',
+                      background: reworkReason.trim().length >= 10 ? '#ff9800' : '#ccc',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: reworkReason.trim().length >= 10 ? 'pointer' : 'not-allowed',
+                      fontSize: '1rem',
+                      fontWeight: '600',
+                      opacity: reworkReason.trim().length >= 10 ? 1 : 0.6
+                    }}
+                  >
+                    Send for Rework
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           <AdminReviewModal
             isOpen={showAdminReviewModal}

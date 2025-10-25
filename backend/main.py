@@ -130,6 +130,10 @@ class ContainerSubmission(BaseModel):
     # approved_by: Optional[str]
     # approved_at: Optional[datetime]
 
+class ReworkRequest(BaseModel):
+    container_id: int
+    rework_reason: str
+
 class AttachmentInfo(BaseModel):
     id: int
     photo_type: str
@@ -414,6 +418,29 @@ async def get_redis_client():
             logger.error("Failed to connect to Redis", error=str(e))
             raise
     return redis_client
+
+async def send_email(to_email: str, subject: str, body: str):
+    """Generic email sender with HTML support"""
+    try:
+        msg = MIMEMultipart('alternative')
+        msg['From'] = NOTIFICATION_FROM_EMAIL
+        msg['To'] = to_email
+        msg['Subject'] = subject
+        
+        # Create HTML part
+        html_part = MIMEText(body, 'html')
+        msg.attach(html_part)
+        
+        # Send via SMTP
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        server.sendmail(NOTIFICATION_FROM_EMAIL, to_email, msg.as_string())
+        server.quit()
+        
+        logger.info("Email sent successfully", to_email=to_email, subject=subject)
+        
+    except Exception as e:
+        logger.error("Failed to send email", error=str(e), to_email=to_email)
+        # Don't raise - we don't want email failures to block operations
 
 async def send_verification_email(email: str, code: str, name: str):
     """Send verification email via SMTP (no authentication)"""
@@ -972,13 +999,15 @@ async def get_containers(authorization: str = Header(None)):
         if current_user['role'] in ['hod', 'admin']:
             container_query = """SELECT id, department, location, submitted_by, whatsapp_number,
                     container, container_type, submitted_at, status, 
-                    approval_comment, approved_by, approved_at 
+                    approval_comment, approved_by, approved_at,
+                    rework_reason, rework_count, reworked_by, reworked_at
                     FROM containers ORDER BY submitted_at DESC"""
             container_params = []
         else:
             container_query = """SELECT id, department, location, submitted_by, whatsapp_number, 
                     container, container_type, submitted_at, status, 
-                    approval_comment, approved_by, approved_at 
+                    approval_comment, approved_by, approved_at,
+                    rework_reason, rework_count, reworked_by, reworked_at
                     FROM containers WHERE submitted_by = $1 ORDER BY submitted_at DESC"""
             container_params = [current_user['name']]
         
@@ -1038,7 +1067,10 @@ async def get_containers(authorization: str = Header(None)):
                 "approval_comment": container_row.get('approval_comment'),
                 "approved_by": container_row.get('approved_by'),
                 "approved_at": container_row['approved_at'].isoformat() if container_row.get('approved_at') else None,
-                "hazards": hazards,
+                "rework_reason": container_row.get('rework_reason'),        
+                "rework_count": container_row.get('rework_count'),          
+                "reworked_by": container_row.get('reworked_by'),            
+                "reworked_at": container_row.get('reworked_at').isoformat() if container_row.get('reworked_at') else None,                  "hazards": hazards,
                 "pairs": pairs
             })
         
@@ -1199,6 +1231,7 @@ async def delete_attachment(
         
         return {"success": True, "message": "Attachment deleted"}
 
+# generate PDF download endpoint
 @app.get("/container-pdf/{container_id}")
 async def download_container_pdf(container_id: int):
     """Direct download endpoint for container PDF via QR code"""
@@ -1320,6 +1353,7 @@ async def get_current_user_from_token(authorization: str = None):
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
+# Preview Endpoint
 @app.post("/preview-status/")
 async def get_preview_status(hazard_a_id: int, hazard_b_id: int, distance: float):
     """Get real-time status preview for a hazard pair"""
@@ -1618,6 +1652,219 @@ async def approve_container(
     except Exception as e:
         logger.error("Error processing approval", error=str(e))
         raise HTTPException(status_code=500, detail=f"Error processing approval: {str(e)}")
+
+# Rework Request Endpoints
+@app.post("/containers/{container_id}/rework")
+async def request_rework(
+    container_id: int,
+    rework_request: ReworkRequest,
+    authorization: str = Header(None)
+):
+    """Request rework on a container submission (Admin/HOD only)"""
+    user = await get_current_user_from_token(authorization)
+    
+    # Only admin and HOD can request rework
+    if user['role'] not in ['admin', 'hod']:
+        raise HTTPException(status_code=403, detail="Only Admin/HOD can request rework")
+    
+    if not rework_request.rework_reason or len(rework_request.rework_reason.strip()) < 10:
+        raise HTTPException(
+            status_code=400, 
+            detail="Rework reason must be at least 10 characters"
+        )
+    
+    pool = await get_db_pool()
+    async with pool.acquire() as conn:
+        # Get container details
+        container = await conn.fetchrow(
+            "SELECT * FROM containers WHERE id = $1", container_id
+        )
+        
+        if not container:
+            raise HTTPException(status_code=404, detail="Container not found")
+        
+        if container['status'] != 'pending':
+            raise HTTPException(
+                status_code=400, 
+                detail="Only pending containers can be sent for rework"
+            )
+        
+        # Update container status to rework_requested
+        await conn.execute("""
+            UPDATE containers 
+            SET status = 'rework_requested',
+                rework_reason = $1,
+                rework_count = COALESCE(rework_count, 0) + 1,
+                reworked_by = $2,
+                reworked_at = NOW()
+            WHERE id = $3
+        """, rework_request.rework_reason.strip(), user['name'], container_id)
+        
+        # Get submitter email
+        submitter = await conn.fetchrow(
+            "SELECT email FROM users WHERE name = $1", 
+            container['submitted_by']
+        )
+        
+        # Send email notification to submitter
+        if submitter and submitter['email']:
+            try:
+                await send_email(
+                    to_email=submitter['email'],
+                    subject=f"⚠️ Rework Required - Container #{container['container']}",
+                    body=f"""
+                    <h2>Container Submission Requires Rework</h2>
+                    <p>Your container safety assessment has been reviewed and requires modifications.</p>
+                    
+                    <h3>Container Details:</h3>
+                    <ul>
+                        <li><strong>Container ID:</strong> {container['container']}</li>
+                        <li><strong>Department:</strong> {container['department']}</li>
+                        <li><strong>Location:</strong> {container['location']}</li>
+                        <li><strong>Reviewed by:</strong> {user['name']}</li>
+                    </ul>
+                    
+                    <h3>Reason for Rework:</h3>
+                    <p style="background: #fff3e0; padding: 15px; border-left: 4px solid #ff9800; margin: 15px 0;">
+                        {rework_request.rework_reason.strip()}
+                    </p>
+                    
+                    <p><strong>Action Required:</strong> Please log in to the system, review the feedback, and resubmit your assessment with the requested changes.</p>
+                    
+                    <p>This is rework request #{container['rework_count'] + 1} for this container.</p>
+                    
+                    <p>Best regards,<br>Kinross Chemical Safety System</p>
+                    """
+                )
+            except Exception as e:
+                print(f"Failed to send rework email: {e}")
+        
+        return {
+            "success": True,
+            "message": f"Container sent for rework. Notification sent to {container['submitted_by']}",
+            "container_id": container_id,
+            "rework_count": container['rework_count'] + 1
+        }
+
+@app.put("/containers/{container_id}/update")
+async def update_container(
+    container_id: int,
+    container_data: ContainerSubmission,
+    authorization: str = Header(None)
+):
+    """Update a reworked container and change status back to pending"""
+    user = await get_current_user_from_token(authorization)
+    
+    pool = await get_db_pool()
+    async with pool.acquire() as conn:
+        # Get existing container
+        existing = await conn.fetchrow(
+            "SELECT * FROM containers WHERE id = $1", container_id
+        )
+        
+        if not existing:
+            raise HTTPException(status_code=404, detail="Container not found")
+        
+        # Only the submitter can update their reworked container
+        if existing['submitted_by'] != user['name']:
+            raise HTTPException(
+                status_code=403, 
+                detail="Only the original submitter can update this container"
+            )
+        
+        # Only rework_requested containers can be updated
+        if existing['status'] != 'rework_requested':
+            raise HTTPException(
+                status_code=400, 
+                detail="Only containers requiring rework can be updated"
+            )
+        
+        async with conn.transaction():
+            # Update container - reset to pending status
+            await conn.execute("""
+                UPDATE containers 
+                SET department = $1,
+                    location = $2,
+                    container_type = $3,
+                    whatsapp_number = $4,
+                    status = 'pending',
+                    rework_reason = NULL,
+                    reworked_by = NULL,
+                    reworked_at = NULL
+                WHERE id = $5
+            """, 
+            container_data.department,
+            container_data.location,
+            container_data.container_type,
+            container_data.whatsapp_number,
+            container_id)
+            
+            # Delete old hazards
+            await conn.execute(
+                "DELETE FROM container_hazards WHERE container_id = $1",
+                container_id
+            )
+            
+            # Insert new hazards
+            for hazard_id in container_data.selected_hazards:
+                await conn.execute("""
+                    INSERT INTO container_hazards (container_id, hazard_category_id)
+                    VALUES ($1, $2)
+                """, container_id, hazard_id)
+            
+            # Delete old pairs
+            await conn.execute(
+                "DELETE FROM hazard_pairs WHERE container_id = $1",
+                container_id
+            )
+            
+            # Insert new pairs
+            for pair in container_data.hazard_pairs:
+                await conn.execute("""
+                    INSERT INTO hazard_pairs 
+                    (container_id, hazard_category_a_id, hazard_category_b_id, distance)
+                    VALUES ($1, $2, $3, $4)
+                """, container_id, pair.hazard_category_a_id, 
+                pair.hazard_category_b_id, pair.distance)
+        
+        # Send notification to admin/HOD that container was resubmitted
+        try:
+            # Get admin/HOD emails
+            admin_users = await conn.fetch(
+                "SELECT email FROM users WHERE role IN ('admin', 'hod') AND active = true"
+            )
+            
+            for admin in admin_users:
+                if admin['email']:
+                    await send_email(
+                        to_email=admin['email'],
+                        subject=f"🔄 Container Resubmitted - {existing['container']}",
+                        body=f"""
+                        <h2>Container Has Been Resubmitted After Rework</h2>
+                        <p>A container that required rework has been updated and resubmitted for approval.</p>
+                        
+                        <h3>Container Details:</h3>
+                        <ul>
+                            <li><strong>Container ID:</strong> {existing['container']}</li>
+                            <li><strong>Department:</strong> {container_data.department}</li>
+                            <li><strong>Location:</strong> {container_data.location}</li>
+                            <li><strong>Resubmitted by:</strong> {user['name']}</li>
+                            <li><strong>Rework Count:</strong> {existing['rework_count'] or 0}</li>
+                        </ul>
+                        
+                        <p>Please log in to review the updated submission.</p>
+                        
+                        <p>Best regards,<br>Kinross Safety System</p>
+                        """
+                    )
+        except Exception as e:
+            print(f"Failed to send resubmission notification: {e}")
+        
+        return {
+            "success": True,
+            "message": "Container updated and resubmitted for approval",
+            "container_id": container_id
+        }
 
 # Delete Containers Endpoint
 @app.delete("/containers/{container_id}")
