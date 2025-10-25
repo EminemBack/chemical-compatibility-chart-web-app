@@ -1682,18 +1682,20 @@ const ContainerDetailModal: React.FC<{
   onGeneratePDF: (container: ContainerData) => void;
   authUser: User | null;
   onRequestDeletion: (containerId: number) => void;
+  onEditContainer: (containerId: number) => void;  // new prop for editing
   // Add these new props for the helper functions
   getStatusText: (status: string) => string;
   getStatusColor: (status: string) => any;
   getIsolationStatus: (is_isolated: boolean, min_required_distance: number) => any;
 }> = ({ 
   container, 
-  isOpen, 
-  onClose, 
+  isOpen,
+  onClose,
   // hazardCategories, 
-  onGeneratePDF, 
+  onGeneratePDF,
   authUser, 
   onRequestDeletion,
+  onEditContainer,
   getStatusText,
   getStatusColor,
   getIsolationStatus
@@ -1764,7 +1766,7 @@ const ContainerDetailModal: React.FC<{
         fontWeight: '700',
         textTransform: 'uppercase'
       }}>
-        {status === 'rework_requested' ? 'REWORK REQUIRED' : status}
+        {status === 'rework_requested' ? 'REWORKED' : status}
       </span>
     );
   };
@@ -1875,7 +1877,7 @@ const ContainerDetailModal: React.FC<{
                 gap: '0.5rem'
               }}>
                 <span style={{ fontSize: '1.3rem' }}>↩️</span>
-                Rework Required (Request #{container.rework_count || 1})
+                Reworked (#{container.rework_count || 1})
               </h4>
               <p style={{ margin: '0 0 1rem 0', fontWeight: '600', color: '#f57c00' }}>
                 Reviewed by: {container.reworked_by}
@@ -2214,6 +2216,31 @@ const ContainerDetailModal: React.FC<{
                 }}
               >
                 🗑️ Request Deletion
+              </button>
+            )}
+
+            {/* Edit & Resubmit Button - Only for rework_requested containers by submitter */}
+            {container.status === 'rework_requested' && authUser && container.submitted_by === authUser.name && (
+              <button
+                onClick={() => onEditContainer(container.id)}
+                style={{
+                  padding: '0.875rem 2rem',
+                  background: 'linear-gradient(135deg, #ff9800, #f57c00)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontWeight: '700',
+                  fontSize: '1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                  boxShadow: '0 4px 15px rgba(255, 152, 0, 0.3)',
+                  transition: 'all 0.3s ease'
+                }}
+              >
+                <span style={{ fontSize: '1.2rem' }}>✏️</span>
+                <span>Edit & Resubmit</span>
               </button>
             )}
           </div>
@@ -3695,7 +3722,7 @@ function App() {
         fontWeight: '700',
         textTransform: 'uppercase'
       }}>
-        {status === 'rework_requested' ? 'REWORK REQUIRED' : status}
+        {status === 'rework_requested' ? 'REWORKED' : status}
       </span>
     );
   };
@@ -5271,39 +5298,6 @@ function App() {
                             borderTop: '1px solid var(--kinross-light-gray)',
                             marginTop: 'auto'
                           }}>
-                            {/* Edit Button for Rework Required */}
-                            {container.status === 'rework_requested' && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  loadContainerForEdit(container.id);
-                                }}
-                                style={{
-                                  padding: '0.5rem 1rem',
-                                  background: '#ff9800',
-                                  color: 'white',
-                                  border: 'none',
-                                  borderRadius: '6px',
-                                  cursor: 'pointer',
-                                  fontWeight: '600',
-                                  fontSize: '0.85rem',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '0.5rem',
-                                  transition: 'all 0.3s ease'
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.background = '#e65100';
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.background = '#ff9800';
-                                }}
-                              >
-                                <span>✏️</span>
-                                <span>Edit & Resubmit</span>
-                              </button>
-                            )}
-                            
                             <div style={{
                               fontSize: '0.75rem',
                               color: 'var(--kinross-dark-gray)',
@@ -6706,7 +6700,7 @@ function App() {
                   gap: '0.75rem'
                 }}>
                   <span style={{ fontSize: '1.8rem' }}>↩️</span>
-                  Request Rework
+                  Send to Rework
                 </h2>
 
                 <p style={{
@@ -6792,7 +6786,7 @@ function App() {
                       opacity: reworkReason.trim().length >= 10 ? 1 : 0.6
                     }}
                   >
-                    Send for Rework
+                    Send to Rework
                   </button>
                 </div>
               </div>
@@ -7022,6 +7016,10 @@ function App() {
               onRequestDeletion={(containerId) => {
                 setSelectedContainerForDeletion(containerId);
                 setShowDeletionModal(true);
+                closeContainerModal();
+              }}
+              onEditContainer={(containerId) => {
+                loadContainerForEdit(containerId);
                 closeContainerModal();
               }}
               getStatusText={getStatusText}
