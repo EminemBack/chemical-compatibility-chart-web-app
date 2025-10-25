@@ -1872,7 +1872,7 @@ async def update_container(
                 
                 <p>Please log in to review the updated submission.</p>
                 
-                <p>Best regards,<br>Kinross Safety System</p>
+                <p>Best regards,<br>Kinross Chemical Safety System</p>
                 """
             )            
             
