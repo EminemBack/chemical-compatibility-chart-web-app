@@ -9,7 +9,13 @@ The system implements a multi-stage approval workflow with three main roles:
 - **Admin**: Review submissions for completeness and safety
 - **HOD (Head of Department)**: Final approval authority
 
-## Workflow Diagram
+## Visual Workflow Diagram
+
+![Workflow Diagram](./workflow-diagram.svg)
+
+**[Click here to view full-size diagram](./workflow-diagram.svg)**
+
+## Workflow Diagram (Mermaid)
 
 ```mermaid
 flowchart TD
