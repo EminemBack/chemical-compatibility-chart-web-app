@@ -194,6 +194,9 @@ class AdminReviewRequest(BaseModel):
     comment: str
     recommendation: str  # 'approve' or 'reject'
 
+class AdminContainerReviewRequest(BaseModel):
+    review_comment: str
+
 class HODDecisionRequest(BaseModel):
     deletion_request_id: int
     decision: str  # 'approved' or 'rejected'
@@ -878,7 +881,7 @@ async def submit_container(submission: ContainerSubmission, authorization: str =
                     VALUES ($1, $2, $3, $4, $5, $6, $7)
                     RETURNING id
                 """, submission.department, submission.location, submission.submitted_by, 
-                    submission.whatsapp_number, submission.container, submission.container_type, 'pending')
+                    submission.whatsapp_number, submission.container, submission.container_type, 'pending_review')
                 
                 logger.info("Container created", container_id=container_id)
                 
@@ -1000,14 +1003,16 @@ async def get_containers(authorization: str = Header(None)):
             container_query = """SELECT id, department, location, submitted_by, whatsapp_number,
                     container, container_type, submitted_at, status, 
                     approval_comment, approved_by, approved_at,
-                    rework_reason, rework_count, reworked_by, reworked_at
+                    rework_reason, rework_count, reworked_by, reworked_at,
+                    admin_reviewer, admin_review_date, admin_review_comment
                     FROM containers ORDER BY submitted_at DESC"""
             container_params = []
         else:
             container_query = """SELECT id, department, location, submitted_by, whatsapp_number, 
                     container, container_type, submitted_at, status, 
                     approval_comment, approved_by, approved_at,
-                    rework_reason, rework_count, reworked_by, reworked_at
+                    rework_reason, rework_count, reworked_by, reworked_at,
+                    admin_reviewer, admin_review_date, admin_review_comment
                     FROM containers WHERE submitted_by = $1 ORDER BY submitted_at DESC"""
             container_params = [current_user['name']]
         
@@ -1070,7 +1075,11 @@ async def get_containers(authorization: str = Header(None)):
                 "rework_reason": container_row.get('rework_reason'),        
                 "rework_count": container_row.get('rework_count'),          
                 "reworked_by": container_row.get('reworked_by'),            
-                "reworked_at": container_row.get('reworked_at').isoformat() if container_row.get('reworked_at') else None,                  "hazards": hazards,
+                "reworked_at": container_row.get('reworked_at').isoformat() if container_row.get('reworked_at') else None,
+                "admin_reviewer": container_row['admin_reviewer'],
+                "admin_review_date": container_row['admin_review_date'].isoformat() if container_row['admin_review_date'] else None,
+                "admin_review_comment": container_row['admin_review_comment'],
+                "hazards": hazards,
                 "pairs": pairs
             })
         
@@ -1517,14 +1526,14 @@ async def get_pending_containers(authorization: str = Header(None)):
     try:
         current_user = await get_current_user_from_token(authorization)
         
-        if current_user['role'] not in ['hod', 'admin']:
+        if current_user['role'] != 'hod':
             raise HTTPException(status_code=403, detail="Admin access required")
         
         container_rows = await execute_query("""
             SELECT c.*, u.name as submitter_name, u.email as submitter_email
             FROM containers c 
             JOIN users u ON c.submitted_by = u.name
-            WHERE c.status = 'pending'
+            WHERE c.status IN ('pending_review', 'pending')
             ORDER BY c.submitted_at ASC
         """)
         
@@ -1602,7 +1611,7 @@ async def approve_container(
     try:
         current_user = await get_current_user_from_token(authorization)
         
-        if current_user['role'] not in ['hod', 'admin']:
+        if current_user['role'] != 'hod':
             raise HTTPException(status_code=403, detail="Admin access required")
 
         # VALIDATION - Check for non-empty comment
@@ -1618,7 +1627,23 @@ async def approve_container(
                 status_code=400,
                 detail="Comment must be at least 10 characters long. Please provide a detailed reason."
             )
-                
+        
+        # ADD THIS: Check current container status
+        container = await execute_single(
+            "SELECT status, container FROM containers WHERE id = $1",
+            container_id
+        )
+        
+        if not container:
+            raise HTTPException(status_code=404, detail="Container not found")
+        
+        # Only allow approval of pending, admin_reviewed, or rework_requested containers
+        if container['status'] not in ['pending_review', 'pending', 'rework_requested']:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot approve container with status '{container['status']}'. Container may have already been processed."
+            )
+        
         # Update container status
         await execute_command("""
             UPDATE containers 
@@ -1660,55 +1685,59 @@ async def request_rework(
     rework_request: ReworkRequest,
     authorization: str = Header(None)
 ):
-    """Request rework on a container submission (Admin/HOD only)"""
-    user = await get_current_user_from_token(authorization)
-    
-    # Only admin and HOD can request rework
-    if user['role'] not in ['admin', 'hod']:
-        raise HTTPException(status_code=403, detail="Only Admin/HOD can request rework")
-    
-    if not rework_request.rework_reason or len(rework_request.rework_reason.strip()) < 10:
-        raise HTTPException(
-            status_code=400, 
-            detail="Rework reason must be at least 10 characters"
-        )
-    
-    pool = await get_db_pool()
-    async with pool.acquire() as conn:
-        # Get container details
-        container = await conn.fetchrow(
-            "SELECT * FROM containers WHERE id = $1", container_id
+    """Request rework for a container (Admin or HOD)"""
+    try:
+        current_user = await get_current_user_from_token(authorization)
+        
+        # Allow both admin and HOD to rework
+        if current_user['role'] not in ['admin', 'hod']:
+            raise HTTPException(status_code=403, detail="Admin or HOD access required")
+        
+        # Get container
+        container = await execute_single(
+            "SELECT * FROM containers WHERE id = $1",
+            container_id
         )
         
         if not container:
             raise HTTPException(status_code=404, detail="Container not found")
         
-        if container['status'] != 'pending':
+        # Admin can only rework pending_review, HOD can rework pending_review or pending
+        if current_user['role'] == 'admin' and container['status'] != 'pending_review':
             raise HTTPException(
-                status_code=400, 
-                detail="Only pending containers can be sent for rework"
+                status_code=400,
+                detail="Admin can only rework containers in pending_review status"
+            )
+        
+        if current_user['role'] == 'hod' and container['status'] not in ['pending_review', 'pending']:
+            raise HTTPException(
+                status_code=400,
+                detail="Container cannot be reworked in current status"
             )
         
         # Update container status to rework_requested
-        await conn.execute("""
-            UPDATE containers 
+        await execute_command("""
+            UPDATE containers
             SET status = 'rework_requested',
                 rework_reason = $1,
                 rework_count = COALESCE(rework_count, 0) + 1,
                 reworked_by = $2,
-                reworked_at = NOW()
-            WHERE id = $3
-        """, rework_request.rework_reason.strip(), user['name'], container_id)
+                reworked_at = $3
+            WHERE id = $4
+        """,
+            rework_request.rework_reason.strip(),
+            current_user['name'],
+            datetime.utcnow(),
+            container_id
+        )
         
-        # Get submitter email
-        submitter = await conn.fetchrow(
-            "SELECT email FROM users WHERE name = $1", 
+        # Get submitter email for notification
+        submitter = await execute_single(
+            "SELECT email, name FROM users WHERE name = $1",
             container['submitted_by']
         )
         
-        # Send email notification to submitter
-        if submitter and submitter['email']:
-            try:
+        if submitter:
                 await send_email(
                     to_email=submitter['email'],
                     subject=f"⚠️ Rework Required - Container #{container['container']}",
@@ -1721,7 +1750,7 @@ async def request_rework(
                         <li><strong>Container ID:</strong> {container['container']}</li>
                         <li><strong>Department:</strong> {container['department']}</li>
                         <li><strong>Location:</strong> {container['location']}</li>
-                        <li><strong>Reviewed by:</strong> {user['name']}</li>
+                        <li><strong>Reviewed by:</strong> {current_user['name']}</li>
                     </ul>
                     
                     <h3>Reason for Rework:</h3>
@@ -1736,15 +1765,168 @@ async def request_rework(
                     <p>Best regards,<br>Kinross Chemical Safety System</p>
                     """
                 )
+        
+        logger.info(
+            "Container rework requested",
+            container_id=container_id,
+            reworked_by=current_user['name']
+        )
+        
+        return {"message": "Container sent for rework successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error requesting rework", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Error requesting rework: {str(e)}")
+
+@app.post("/containers/{container_id}/admin-review")
+async def admin_review_container(
+    container_id: int,
+    review_request: AdminContainerReviewRequest,
+    authorization: str = Header(None)
+):
+    """Admin reviews a container and changes status from pending_review to pending"""
+    try:
+        current_user = await get_current_user_from_token(authorization)
+
+        if current_user['role'] != 'admin':
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+        if not review_request.review_comment or review_request.review_comment.strip() == "":
+            raise HTTPException(status_code=400, detail="Review comment is required")
+
+        if len(review_request.review_comment.strip()) < 10:
+            raise HTTPException(
+                status_code=400,
+                detail="Review comment must be at least 10 characters long"
+            )
+
+        container = await execute_single(
+            "SELECT * FROM containers WHERE id = $1",
+            container_id
+        )
+
+        if not container:
+            raise HTTPException(status_code=404, detail="Container not found")
+
+        # Only pending_review containers can be reviewed by admin
+        if container['status'] != 'pending_review':
+            raise HTTPException(
+                status_code=400,
+                detail=f"Container cannot be reviewed in {container['status']} status"
+            )
+
+        # Change status from pending_review to pending (ready for HOD)
+        await execute_command("""
+            UPDATE containers
+            SET status = 'pending',
+                admin_reviewer = $1,
+                admin_review_date = $2,
+                admin_review_comment = $3
+            WHERE id = $4
+        """,
+            current_user['name'],
+            datetime.utcnow(),
+            review_request.review_comment.strip(),
+            container_id
+        )
+        
+        # Get HOD users to notify
+        # hod_users = await execute_query(
+        #     "SELECT email, name FROM users WHERE role = 'hod' AND department = $1 AND active = true",
+        #     "Health & Safety"
+        # )
+        
+        # Send email to HOD
+        if HOD_EMAILS and HOD_EMAILS[0]:  # Check if HOD_EMAILS is configured
+            for hod_email in HOD_EMAILS:
+                logger.info("Notifying HOD after admin review", hod_email=hod_email, container_id=container['container'])
+                hod = await execute_single(
+                    "SELECT email, name FROM users WHERE email = $1 AND active = true",
+                    hod_email.lower().strip()
+                )
+                # if hod['email']:
+                try:
+                    hod_email_body = f"""
+Hello {hod['email']},
+
+A container has been reviewed by Admin and is ready for your final approval.
+
+Container Details:
+- Container ID: {container['container']}
+- Department: {container['department']}
+- Location: {container['location']}
+- Submitted by: {container['submitted_by']}
+- Reviewed by: {current_user['name']} (Admin)
+
+Admin Review Comments:
+{review_request.review_comment.strip()}
+
+Please log in to the system to approve or reject this container.
+
+Best regards,
+Kinross Safety System
+                    """
+                    await send_email(
+                        to_email=hod_email,
+                        subject=f"✅ Container Ready for HOD Approval - {container['container']}",
+                        body=hod_email_body
+                    )
+                    
+                    logger.info("HOD notification sent after admin review", 
+                            email=hod['email'],
+                            container_id=container['container'])
+                    
+                except Exception as e:
+                    logger.error(f"Failed to send HOD notification", error=str(e))
+        
+        # Notify submitter that their container is progressing
+        submitter = await execute_single(
+            "SELECT email FROM users WHERE name = $1", 
+            container['submitted_by']
+        )
+        
+        if submitter and submitter['email']:
+            try:
+                submitter_email_body = f"""
+Hello {container['submitted_by']},
+
+Your container submission has been reviewed by the Admin team and is now awaiting HOD approval.
+
+Container Details:
+  - Container ID: {container['container']}
+  - Department: {container['department']}
+  - Location: {container['location']}
+  - Reviewed by: {current_user['name']} (Admin)
+
+Status: Admin Reviewed ✅
+
+Your submission will be reviewed by the HOD for final approval.
+
+Best regards,
+Kinross Safety Team
+                """
+                await send_email(
+                    submitter['email'],
+                    f"📋 Container Under Review - {container['container']}",
+                    body=submitter_email_body
+                )
+                
             except Exception as e:
-                print(f"Failed to send rework email: {e}")
+                logger.error("Failed to send submitter notification", error=str(e))
         
         return {
             "success": True,
-            "message": f"Container sent for rework. Notification sent to {container['submitted_by']}",
-            "container_id": container_id,
-            "rework_count": container['rework_count'] + 1
+            "message": f"Container reviewed and forwarded to HOD for approval",
+            "container_id": container_id
         }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error processing admin review", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Error processing admin review: {str(e)}")
 
 @app.put("/containers/{container_id}/update")
 async def update_container(
@@ -1788,7 +1970,7 @@ async def update_container(
                         location = $2,
                         container_type = $3,
                         whatsapp_number = $4,
-                        status = 'pending',
+                        status = 'pending_review',
                         rework_reason = NULL,
                         reworked_by = NULL,
                         reworked_at = NULL

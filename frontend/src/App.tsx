@@ -36,6 +36,9 @@ interface ContainerData {
   rework_count?: number;          // field for rework reason
   reworked_by?: string;           // field for rework reason
   reworked_at?: string;           // field for rework reason
+  admin_reviewer?: string;        // field for admin reviewer
+  admin_review_date?: string;     // field for admin reviewer
+  admin_review_comment?: string;  // field for admin reviewer
   hazards: Array<{name: string, hazard_class: string}>;
   pairs: Array<{
     id: number;
@@ -1898,6 +1901,39 @@ const ContainerDetailModal: React.FC<{
             </div>
           )}
 
+          {/* Admin Review Comments */}
+          {container.admin_review_comment && (
+            <div style={{
+              marginBottom: '2rem',
+              padding: '1.5rem',
+              background: '#e3f2fd',
+              borderRadius: '10px',
+              border: '2px solid #2196F3'
+            }}>
+              <h4 style={{ 
+                margin: '0 0 1rem 0', 
+                color: '#1565c0',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem'
+              }}>
+                <span style={{ fontSize: '1.3rem' }}>📋</span>
+                Admin Review
+              </h4>
+              <p style={{ margin: '0 0 0.5rem 0', fontWeight: '600', color: '#1976d2' }}>
+                Reviewed by: {container.admin_reviewer}
+              </p>
+              {container.admin_review_date && (
+                <p style={{ margin: '0 0 1rem 0', fontSize: '0.9rem', color: '#666' }}>
+                  Date: {new Date(container.admin_review_date).toLocaleString()}
+                </p>
+              )}
+              <p style={{ margin: 0, fontStyle: 'italic', color: '#1565c0', lineHeight: '1.6' }}>
+                {container.admin_review_comment}
+              </p>
+            </div>
+          )}
+
           {/* Approval Comments */}
           {container.approval_comment && (
             <div style={{
@@ -2264,10 +2300,14 @@ function App() {
   const [hazardPairs, setHazardPairs] = useState<HazardPairData[]>([]);
   const [containers, setContainers] = useState<ContainerData[]>([]);
   // UPDATE THIS EXISTING LINE (change 'containers' to 'approvals'):
-  const [activeTab, setActiveTab] = useState<'form' | 'containers' | 'approvals' | 'deletions' | 'admin-deletions' | 'analytics' | 'users'>('form');
+  const [activeTab, setActiveTab] = useState<'form' | 'containers' | 'approvals' | 'admin-review' | 'deletions' | 'admin-deletions' | 'analytics' | 'users'>('form');
   const [loading, setLoading] = useState(false);
   const [pairStatuses, setPairStatuses] = useState<{[key: string]: any}>({});
   const [pendingContainers, setPendingContainers] = useState<ContainerData[]>([]);
+
+  // ADMIN REVIEW CONTAINERS STATE
+  const [adminReviewContainers, setAdminReviewContainers] = useState<ContainerData[]>([]);
+
   // Add this with your other state declarations
   // const [expandedContainers, setExpandedContainers] = useState<Set<number>>(new Set());
   const [containerModalOpen, setContainerModalOpen] = useState<number | null>(null);
@@ -2300,6 +2340,7 @@ function App() {
   const [editingContainerId, setEditingContainerId] = useState<number | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
 
+  // SUCCESS MODAL STATES
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [submittedContainerName, setSubmittedContainerName] = useState('');
 
@@ -2369,6 +2410,13 @@ function App() {
 
   const [uploadingAttachments, setUploadingAttachments] = useState(false);
 
+  // ADMIN REVIEW MODAL STATES
+  const [adminReviewModal, setAdminReviewModal] = useState<{ isOpen: boolean; containerId: number }>({
+    isOpen: false,
+    containerId: 0
+  });
+  const [adminReviewComment, setAdminReviewComment] = useState('');
+
   // useEffect to check auth status and fetch hazard categories on mount
   useEffect(() => {
     checkAuthStatus(); // Check auth first, don't call other functions yet
@@ -2381,8 +2429,8 @@ function App() {
     if (authState.user && !authState.loading) {
       fetchContainers(); // Only fetch containers after user is authenticated
       
-      // Fetch pending count if user is admin or HOD
-      if (authState.user.role === 'admin' || authState.user.role === 'hod') {
+      // Fetch pending count only if user is HOD
+      if (authState.user.role === 'hod') {
         fetchPendingApprovalsCount();
       }
     }
@@ -2390,7 +2438,7 @@ function App() {
 
   // useEffect - Auto-refresh pending count every 30 seconds
   useEffect(() => {
-    if (authState.user && (authState.user.role === 'admin' || authState.user.role === 'hod')) {
+    if (authState.user && authState.user.role === 'hod') {
       // Initial fetch
       fetchPendingApprovalsCount();
       
@@ -2829,6 +2877,26 @@ function App() {
     }
   };
 
+  const fetchAdminReviewContainers = async () => {
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(`${API_BASE}/containers/`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Filter for pending containers (not yet reviewed by admin)
+        const pending = data.filter((c: ContainerData) => c.status === 'pending_review');
+        setAdminReviewContainers(pending);
+      }
+    } catch (error) {
+      console.error('Error fetching admin review containers:', error);
+    }
+  };
+
   const fetchPendingApprovalsCount = async () => {
     try {
       const token = localStorage.getItem('access_token');
@@ -3069,6 +3137,7 @@ function App() {
         fetchPendingContainers();
         fetchContainers();
         fetchPendingApprovalsCount();
+        fetchAdminReviewContainers(); // Refresh admin review list
       } else {
         const error = await response.json();
         alert(`❌ Error: ${error.detail}`);
@@ -3076,6 +3145,46 @@ function App() {
     } catch (error) {
       console.error('Error requesting rework:', error);
       alert('❌ Error sending rework request. Please try again.');
+    }
+  };
+
+  const submitAdminReview = async (containerId: number, comment: string) => {
+    if (!comment || comment.trim().length < 10) {
+      alert('⚠️ Review comment must be at least 10 characters');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(`${API_BASE}/containers/${containerId}/admin-review`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          review_comment: comment.trim()
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        alert(`✅ ${data.message}`);
+        setAdminReviewModal({ isOpen: false, containerId: 0 });
+        setAdminReviewComment('');
+        fetchAdminReviewContainers();
+        fetchContainers();
+        // Also refresh pending for HOD if needed
+        if (authState.user && authState.user.role === 'hod') {
+          fetchPendingContainers();
+        }
+      } else {
+        const error = await response.json();
+        alert(`❌ Error: ${error.detail}`);
+      }
+    } catch (error) {
+      console.error('Error submitting admin review:', error);
+      alert('❌ Error submitting review. Please try again.');
     }
   };
 
@@ -4127,18 +4236,37 @@ function App() {
                 </button>
               )}
 
+              {/* Admin Review Button - Only for Admins */}
+              {authState.user && authState.user.role === 'admin' && (
+                <button 
+                  className={activeTab === 'admin-review' ? 'active' : ''}
+                  onClick={() => {
+                    setActiveTab('admin-review');
+                    fetchAdminReviewContainers();
+                  }}
+                  style={{ position: 'relative' }}
+                >
+                  <span>Admin Review</span>
+                  {adminReviewContainers.length > 0 && (
+                    <span className="notification-badge">
+                      {adminReviewContainers.length}
+                    </span>
+                  )}
+                </button>
+              )}
+
               {/* UPDATE approvals button: */}
-              {authState.user && (authState.user.role === 'hod' || authState.user.role === 'admin') && (
+              {authState.user && authState.user.role === 'hod' && (
                 <button 
                   className={activeTab === 'approvals' ? 'active' : ''}
                   onClick={() => {
                     setActiveTab('approvals');
-                    if (authState.user && (authState.user.role === 'hod' || authState.user.role === 'admin')) {
+                    if (authState.user && authState.user.role === 'hod') {
                       fetchPendingContainers();
                       fetchPendingApprovalsCount();
                     }
                   }}
-                  style={{ position: 'relative' }}  // ADD THIS
+                  style={{ position: 'relative' }}
                 >
                   <span>Pending Approvals</span>
                   {pendingApprovalsCount > 0 && (
@@ -5460,7 +5588,7 @@ function App() {
                 </div>
               </div>
             )}
-            {activeTab === 'approvals' && authState.user && (authState.user.role === 'hod' || authState.user.role === 'admin') && (
+            {activeTab === 'approvals' && authState.user && authState.user.role === 'hod' && (
               <div className="containers-view">
                 <div style={{ 
                   display: 'flex', 
@@ -5525,7 +5653,8 @@ function App() {
                           borderRadius: '12px',
                           boxShadow: '0 4px 15px rgba(30, 58, 95, 0.1)',
                           border: '1px solid var(--kinross-medium-gray)',
-                          borderLeft: '5px solid #ff9800', // Orange for pending
+                          borderLeft: container.status === 'pending_review' ? '5px solid #2196F3' : 
+                                      container.admin_reviewer ? '5px solid #4CAF50' : '5px solid #FFA500',
                           cursor: 'pointer',
                           transition: 'all 0.3s ease',
                           display: 'flex',
@@ -5568,16 +5697,16 @@ function App() {
                               #{container.container}
                             </h3>
                             <span style={{
-                              backgroundColor: '#fff3e0',
-                              color: '#f57c00',
-                              border: '2px solid #ff9800',
+                              backgroundColor: container.status === 'pending_review' ? '#E3F2FD' : '#FFF3E0',
+                              color: container.status === 'pending_review' ? '#1976D2' : '#F57C00',
+                              border: `2px solid ${container.status === 'pending_review' ? '#2196F3' : '#ff9800'}`,
                               padding: '0.2rem 0.6rem',
                               borderRadius: '15px',
                               fontSize: '0.7rem',
                               fontWeight: '700',
                               textTransform: 'uppercase'
                             }}>
-                              PENDING
+                              {container.status === 'pending_review' ? 'PENDING REVIEW' : 'PENDING APPROVAL'}
                             </span>
                           </div>
 
@@ -5647,6 +5776,26 @@ function App() {
                               </span>
                             </div>
                           </div>
+
+                          {container.admin_reviewer && (
+                            <div style={{
+                              marginTop: '10px',
+                              padding: '8px',
+                              backgroundColor: '#E8F5E9',
+                              borderRadius: '4px',
+                              borderLeft: '3px solid #4CAF50',
+                              fontSize: '0.75rem'
+                            }}>
+                              <strong style={{ color: '#2E7D32' }}>✓ Reviewed by {container.admin_reviewer}</strong>
+                              {container.admin_review_comment && (
+                                <p style={{ margin: '4px 0 0 0', color: '#424242' }}>
+                                  {container.admin_review_comment.length > 60 
+                                    ? container.admin_review_comment.substring(0, 60) + '...' 
+                                    : container.admin_review_comment}
+                                </p>
+                              )}
+                            </div>
+                          )}
                         </div>
 
                         {/* Approval Actions Footer */}
@@ -5805,6 +5954,289 @@ function App() {
                           }
                           return null;
                         })()}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Admin Review Tab - Only for Admins */}
+            {activeTab === 'admin-review' && authState.user && authState.user.role === 'admin' && (
+              <div className="containers-view">
+                <div style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center',
+                  marginBottom: '2rem'
+                }}>
+                  <div>
+                    <h2 style={{ margin: '0 0 0.5rem 0' }}>Admin Review Queue</h2>
+                    <p style={{ 
+                      margin: 0,
+                      color: 'var(--kinross-dark-gray)',
+                      fontSize: '1rem'
+                    }}>
+                      Review and approve containers before forwarding to HOD
+                    </p>
+                  </div>
+                  
+                  {adminReviewContainers.length > 0 && (
+                    <div style={{
+                      background: '#e3f2fd',
+                      color: '#1565c0',
+                      padding: '0.75rem 1.5rem',
+                      borderRadius: '25px',
+                      fontSize: '1rem',
+                      fontWeight: '700',
+                      border: '2px solid #2196F3',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem'
+                    }}>
+                      <span style={{ fontSize: '1.2rem' }}>📋</span>
+                      <span>{adminReviewContainers.length} Pending Review</span>
+                    </div>
+                  )}
+                </div>
+
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+                  gap: '1.5rem',
+                  marginTop: '2rem'
+                }}>
+                  {adminReviewContainers.length === 0 ? (
+                    <div style={{
+                      gridColumn: '1 / -1',
+                      textAlign: 'center',
+                      padding: '3rem',
+                      color: 'var(--kinross-dark-gray)',
+                      background: 'var(--kinross-light-gray)',
+                      borderRadius: '12px'
+                    }}>
+                      <p style={{ margin: '0', fontSize: '1.1rem' }}>No containers pending review.</p>
+                    </div>
+                  ) : (
+                    adminReviewContainers.map(container => (
+                      <div 
+                        key={container.id} 
+                        className="container-card" 
+                        style={{
+                          padding: '1.5rem',
+                          background: 'var(--kinross-white)',
+                          borderRadius: '12px',
+                          boxShadow: '0 4px 15px rgba(30, 58, 95, 0.1)',
+                          border: '1px solid var(--kinross-medium-gray)',
+                          borderLeft: '5px solid #2196F3',
+                          cursor: 'pointer',
+                          transition: 'all 0.3s ease',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'space-between',
+                          minHeight: '240px',
+                          maxHeight: '240px',
+                          position: 'relative',
+                          overflow: 'hidden'
+                        }}
+                        onClick={() => openContainerModal(container.id)}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = 'translateY(-4px)';
+                          e.currentTarget.style.boxShadow = '0 8px 25px rgba(30, 58, 95, 0.15)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = 'translateY(0)';
+                          e.currentTarget.style.boxShadow = '0 4px 15px rgba(30, 58, 95, 0.1)';
+                        }}
+                      >
+                        {/* Header Section */}
+                        <div>
+                          <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'flex-start',
+                            marginBottom: '1rem'
+                          }}>
+                            <h3 style={{ 
+                              margin: 0, 
+                              fontSize: '1.1rem', 
+                              color: 'var(--kinross-navy)',
+                              fontWeight: '700',
+                              lineHeight: '1.2',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              maxWidth: '60%'
+                            }}>
+                              #{container.container}
+                            </h3>
+                            <span style={{
+                              backgroundColor: '#e3f2fd',
+                              color: '#1565c0',
+                              border: '2px solid #2196F3',
+                              padding: '0.2rem 0.6rem',
+                              borderRadius: '15px',
+                              fontSize: '0.7rem',
+                              fontWeight: '700',
+                              textTransform: 'uppercase'
+                            }}>
+                              PENDING REVIEW
+                            </span>
+                          </div>
+
+                          {/* Quick Info Grid */}
+                          <div style={{
+                            display: 'grid',
+                            gap: '0.5rem',
+                            fontSize: '0.85rem',
+                            color: 'var(--kinross-dark-gray)'
+                          }}>
+                            <div style={{
+                              display: 'flex',
+                              justifyContent: 'space-between'
+                            }}>
+                              <span style={{ fontWeight: '600' }}>Department:</span>
+                              <span style={{ 
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                maxWidth: '60%',
+                                textAlign: 'right'
+                              }}>
+                                {container.department}
+                              </span>
+                            </div>
+                            
+                            <div style={{
+                              display: 'flex',
+                              justifyContent: 'space-between'
+                            }}>
+                              <span style={{ fontWeight: '600' }}>Submitted:</span>
+                              <span>{new Date(container.submitted_at).toLocaleDateString()}</span>
+                            </div>
+                            
+                            <div style={{
+                              display: 'flex',
+                              justifyContent: 'space-between'
+                            }}>
+                              <span style={{ fontWeight: '600' }}>By:</span>
+                              <span style={{ 
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                maxWidth: '60%',
+                                textAlign: 'right'
+                              }}>
+                                {container.submitted_by}
+                              </span>
+                            </div>
+
+                            <div style={{
+                              display: 'flex',
+                              justifyContent: 'space-between'
+                            }}>
+                              <span style={{ fontWeight: '600' }}>Hazards:</span>
+                              <span style={{
+                                background: 'var(--kinross-gold)',
+                                color: 'white',
+                                padding: '0.15rem 0.5rem',
+                                borderRadius: '10px',
+                                fontSize: '0.75rem',
+                                fontWeight: '700',
+                                minWidth: '20px',
+                                textAlign: 'center'
+                              }}>
+                                {container.hazards.length}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Review Actions Footer */}
+                        <div style={{
+                          paddingTop: '1rem',
+                          borderTop: '1px solid var(--kinross-light-gray)',
+                          marginTop: 'auto'
+                        }}>
+                          {/* Footer action buttons */}
+                          <div style={{
+                            display: 'flex',
+                            gap: '0.5rem',
+                            marginTop: 'auto'
+                          }}>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setAdminReviewModal({ isOpen: true, containerId: container.id });
+                              }}
+                              style={{
+                                flex: 1,
+                                padding: '0.6rem',
+                                background: 'linear-gradient(135deg, #1976D2 0%, #1565C0 100%)',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '6px',
+                                fontSize: '0.85rem',
+                                fontWeight: '600',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.transform = 'translateY(-2px)';
+                                e.currentTarget.style.boxShadow = '0 4px 12px rgba(25, 118, 210, 0.4)';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.transform = 'translateY(0)';
+                                e.currentTarget.style.boxShadow = 'none';
+                              }}
+                            >
+                              ✓ Review & Forward
+                            </button>
+
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setReworkModal({ isOpen: true, containerId: container.id });
+                              }}
+                              style={{
+                                flex: 1,
+                                padding: '0.6rem',
+                                background: 'linear-gradient(135deg, #FF9800 0%, #F57C00 100%)',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '6px',
+                                fontSize: '0.85rem',
+                                fontWeight: '600',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.transform = 'translateY(-2px)';
+                                e.currentTarget.style.boxShadow = '0 4px 12px rgba(255, 152, 0, 0.4)';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.transform = 'translateY(0)';
+                                e.currentTarget.style.boxShadow = 'none';
+                              }}
+                            >
+                              🔄 Rework
+                            </button>
+                          </div>
+
+                          <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                          }}>
+                            <div style={{
+                              fontSize: '0.75rem',
+                              color: 'var(--kinross-dark-gray)',
+                              fontStyle: 'italic'
+                            }}>
+                              Click to view details
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     ))
                   )}
@@ -6862,6 +7294,136 @@ function App() {
             </div>
           )}
 
+          {/* Admin Review Modal */}
+          {adminReviewModal.isOpen && (
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(30, 58, 95, 0.8)',
+              backdropFilter: 'blur(5px)',
+              zIndex: 1000,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '1rem'
+            }} onClick={() => {
+              setAdminReviewModal({ isOpen: false, containerId: 0 });
+              setAdminReviewComment('');
+            }}>
+              <div style={{
+                background: 'white',
+                borderRadius: '12px',
+                maxWidth: '600px',
+                width: '100%',
+                padding: '2rem',
+                boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+                border: '3px solid #2196F3'
+              }} onClick={(e) => e.stopPropagation()}>
+                <h2 style={{
+                  margin: '0 0 1.5rem 0',
+                  color: '#1565c0',
+                  fontSize: '1.5rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem'
+                }}>
+                  <span style={{ fontSize: '1.8rem' }}>📋</span>
+                  Admin Review
+                </h2>
+
+                <p style={{
+                  margin: '0 0 1.5rem 0',
+                  color: 'var(--kinross-dark-gray)',
+                  fontSize: '1rem',
+                  lineHeight: '1.6'
+                }}>
+                  Add your review comments and forward this container to HOD for final approval.
+                </p>
+
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <label style={{
+                    display: 'block',
+                    marginBottom: '0.75rem',
+                    fontWeight: '600',
+                    color: 'var(--kinross-navy)',
+                    fontSize: '1rem'
+                  }}>
+                    Review Comments (Required) *
+                  </label>
+                  <textarea
+                    value={adminReviewComment}
+                    onChange={(e) => setAdminReviewComment(e.target.value)}
+                    placeholder="Provide your review, recommendations, or concerns..."
+                    style={{
+                      width: '100%',
+                      minHeight: '150px',
+                      padding: '1rem',
+                      border: '2px solid var(--kinross-medium-gray)',
+                      borderRadius: '6px',
+                      fontSize: '1rem',
+                      fontFamily: 'inherit',
+                      resize: 'vertical',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                  <small style={{
+                    display: 'block',
+                    marginTop: '0.5rem',
+                    color: 'var(--kinross-dark-gray)',
+                    fontSize: '0.85rem'
+                  }}>
+                    Minimum 10 characters. Your comments will be visible to the HOD.
+                  </small>
+                </div>
+
+                <div style={{
+                  display: 'flex',
+                  gap: '1rem',
+                  justifyContent: 'flex-end'
+                }}>
+                  <button
+                    onClick={() => {
+                      setAdminReviewModal({ isOpen: false, containerId: 0 });
+                      setAdminReviewComment('');
+                    }}
+                    style={{
+                      padding: '0.75rem 1.5rem',
+                      background: '#9e9e9e',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '1rem',
+                      fontWeight: '600'
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => submitAdminReview(adminReviewModal.containerId, adminReviewComment)}
+                    disabled={!adminReviewComment || adminReviewComment.trim().length < 10}
+                    style={{
+                      padding: '0.75rem 1.5rem',
+                      background: adminReviewComment.trim().length >= 10 ? '#2196F3' : '#ccc',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: adminReviewComment.trim().length >= 10 ? 'pointer' : 'not-allowed',
+                      fontSize: '1rem',
+                      fontWeight: '600',
+                      opacity: adminReviewComment.trim().length >= 10 ? 1 : 0.6
+                    }}
+                  >
+                    Submit Review
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <AdminReviewModal
             isOpen={showAdminReviewModal}
             onClose={() => {
@@ -6875,6 +7437,8 @@ function App() {
             }}
             request={selectedRequestForReview}
           />
+
+
 
           {/* DELETION REQUEST MODAL: */}
           <DeletionRequestModal
