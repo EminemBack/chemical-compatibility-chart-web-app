@@ -69,7 +69,7 @@ flowchart TD
 - **Status**: `pending_review`
 - **Visibility**:
   - Appears in **Admin Review** tab (Admins only)
-  - Appears in **Pending Approvals** tab (HOD can see and bypass)
+  - Also visible in **Pending Approvals** tab (HOD only - can bypass admin review)
 - **Notification**: Safety team receives email notification
 
 ### 2. Admin Review (Optional)
@@ -78,11 +78,20 @@ flowchart TD
   - Accuracy of hazard classifications
   - Quality of attached photos
   - Compliance with safety requirements
-- **Decision**: Admin adds review comment (min 10 characters)
-- **Status Change**: `pending_review` → `pending`
-- **Visibility**: Moves to **Pending Approvals** tab for HOD
-- **Notification**: HOD receives email with admin's review comments
-- **Visual Indicator**: Container shows green border and admin review badge
+- **Admin has two options:**
+
+  **Option A: Review & Forward to HOD**
+  - Admin adds review comment (min 10 characters)
+  - **Status Change**: `pending_review` → `pending`
+  - **Visibility**: Moves to **Pending Approvals** tab for HOD
+  - **Notification**: HOD receives email with admin's review comments
+  - **Visual Indicator**: Container shows green border and admin review badge
+
+  **Option B: Send to Rework**
+  - Admin provides rework reason (min 10 characters)
+  - **Status Change**: `pending_review` → `rework_requested`
+  - **Notification**: User receives rework request email
+  - User must edit and resubmit
 
 ### 3. HOD Approval (Final Authority)
 HOD has three options:
@@ -146,7 +155,7 @@ HOD has three options:
 
 ## Visual Indicators
 
-### In Pending Approvals Tab (HOD View)
+### In Pending Approvals Tab (HOD Only - Exclusive Access)
 
 1. **Pending Review (Orange Border)**
    - Container hasn't been admin reviewed
@@ -185,12 +194,19 @@ HOD has three options:
 |--------|------|-------|-----|
 | Submit Container | ✓ | ✓ | ✓ |
 | View Own Assessments | ✓ | ✓ | ✓ |
-| Admin Review | ✗ | ✓ | ✗ |
-| Approve/Reject | ✗ | ✗ | ✓ |
-| Request Rework | ✗ | ✗ | ✓ |
+| Admin Review (Forward to HOD) | ✗ | ✓ | ✗ |
+| **Approve/Reject** | ✗ | **✗** | **✓ (Only)** |
+| Request Rework | ✗ | ✓ (pending_review only) | ✓ (pending_review or pending) |
 | Edit Reworked Container | ✓ (own) | ✗ | ✗ |
 | View All Containers | ✗ | ✓ | ✓ |
+| View Pending Approvals Tab | ✗ | ✗ | ✓ (Only) |
 | Delete Container | ✗ | ✓ | ✓ |
+
+**Key Permissions:**
+- **Only HOD** can approve or reject containers
+- **Only HOD** has access to the "Pending Approvals" tab
+- Admin can review and forward to HOD, or send to rework
+- HOD can bypass admin review and approve directly
 
 ## Best Practices
 

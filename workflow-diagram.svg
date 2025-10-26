@@ -1,4 +1,4 @@
-<svg width="1200" height="1400" xmlns="http://www.w3.org/2000/svg">
+<svg width="1200" height="1450" xmlns="http://www.w3.org/2000/svg">
   <!-- Define styles -->
   <defs>
     <style>
@@ -9,6 +9,8 @@
       .box-rework { fill: #FFF3E0; stroke: #FF9800; stroke-width: 3; }
       .box-action { fill: #F5F5F5; stroke: #757575; stroke-width: 2; }
       .box-decision { fill: #FFF9C4; stroke: #FBC02D; stroke-width: 2; }
+      .box-admin { fill: #E1F5FE; stroke: #0288D1; stroke-width: 2; }
+      .box-hod { fill: #F3E5F5; stroke: #7B1FA2; stroke-width: 2; }
       .text-title { font-family: Arial, sans-serif; font-size: 16px; font-weight: bold; fill: #333; }
       .text-normal { font-family: Arial, sans-serif; font-size: 14px; fill: #555; }
       .text-small { font-family: Arial, sans-serif; font-size: 12px; fill: #666; }
@@ -16,6 +18,7 @@
       .arrow-green { fill: none; stroke: #4CAF50; stroke-width: 2; marker-end: url(#arrowhead-green); }
       .arrow-red { fill: none; stroke: #F44336; stroke-width: 2; marker-end: url(#arrowhead-red); }
       .arrow-orange { fill: none; stroke: #FF9800; stroke-width: 2; marker-end: url(#arrowhead-orange); }
+      .arrow-blue { fill: none; stroke: #2196F3; stroke-width: 2; marker-end: url(#arrowhead-blue); }
     </style>
 
     <!-- Arrow markers -->
@@ -31,141 +34,165 @@
     <marker id="arrowhead-orange" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
       <polygon points="0 0, 10 3, 0 6" fill="#FF9800" />
     </marker>
+    <marker id="arrowhead-blue" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#2196F3" />
+    </marker>
   </defs>
 
   <!-- Title -->
   <text x="600" y="30" text-anchor="middle" class="text-title" font-size="24">Container Safety Assessment Workflow</text>
+  <text x="600" y="55" text-anchor="middle" class="text-small" fill="#999">(Updated: HOD-Only Approval Authority)</text>
 
   <!-- 1. User Submits -->
-  <rect x="450" y="60" width="300" height="80" rx="10" class="box-action"/>
-  <text x="600" y="90" text-anchor="middle" class="text-title">👤 User Submits Container</text>
-  <text x="600" y="110" text-anchor="middle" class="text-small">Fill form + 3 photos</text>
-  <text x="600" y="125" text-anchor="middle" class="text-small">+ hazards + distances</text>
+  <rect x="450" y="80" width="300" height="80" rx="10" class="box-action"/>
+  <text x="600" y="110" text-anchor="middle" class="text-title">👤 User Submits Container</text>
+  <text x="600" y="130" text-anchor="middle" class="text-small">Fill form + 3 photos</text>
+  <text x="600" y="145" text-anchor="middle" class="text-small">+ hazards + distances</text>
 
   <!-- Arrow down -->
-  <path d="M 600 140 L 600 180" class="arrow"/>
+  <path d="M 600 160 L 600 200" class="arrow"/>
 
   <!-- 2. Status: pending_review -->
-  <rect x="450" y="180" width="300" height="70" rx="10" class="box-pending-review"/>
-  <text x="600" y="210" text-anchor="middle" class="text-title">Status: pending_review</text>
-  <text x="600" y="230" text-anchor="middle" class="text-small">🔶 Appears in Admin Review tab</text>
+  <rect x="450" y="200" width="300" height="70" rx="10" class="box-pending-review"/>
+  <text x="600" y="230" text-anchor="middle" class="text-title">Status: pending_review</text>
+  <text x="600" y="250" text-anchor="middle" class="text-small">🔶 Appears in Admin Review tab</text>
 
   <!-- Arrow down split -->
-  <path d="M 600 250 L 600 280" class="arrow"/>
-  <path d="M 600 280 L 300 280 L 300 320" class="arrow"/>
-  <path d="M 600 280 L 900 280 L 900 320" class="arrow"/>
+  <path d="M 600 270 L 600 300" class="arrow"/>
+  <path d="M 600 300 L 250 300 L 250 340" class="arrow"/>
+  <path d="M 600 300 L 950 300 L 950 340" class="arrow"/>
 
   <!-- 3a. Admin Review Path -->
-  <rect x="150" y="320" width="300" height="70" rx="10" class="box-decision"/>
-  <text x="300" y="345" text-anchor="middle" class="text-title">👨‍💼 Admin Reviews</text>
-  <text x="300" y="365" text-anchor="middle" class="text-small">Checks completeness,</text>
-  <text x="300" y="380" text-anchor="middle" class="text-small">safety, photos quality</text>
+  <rect x="100" y="340" width="300" height="90" rx="10" class="box-admin"/>
+  <text x="250" y="365" text-anchor="middle" class="text-title">👨‍💼 Admin Decision</text>
+  <text x="250" y="385" text-anchor="middle" class="text-small">Review for completeness,</text>
+  <text x="250" y="400" text-anchor="middle" class="text-small">safety, photo quality</text>
+  <text x="250" y="420" text-anchor="middle" class="text-small" font-weight="bold" fill="#0288D1">Can: Review OR Rework</text>
 
-  <!-- 3b. HOD Bypass Path -->
-  <rect x="750" y="320" width="300" height="70" rx="10" class="box-decision"/>
-  <text x="900" y="345" text-anchor="middle" class="text-title">👔 HOD Bypass</text>
-  <text x="900" y="365" text-anchor="middle" class="text-small">HOD can approve directly</text>
-  <text x="900" y="380" text-anchor="middle" class="text-small">without waiting for admin</text>
+  <!-- 3b. HOD Direct Path -->
+  <rect x="800" y="340" width="300" height="90" rx="10" class="box-hod"/>
+  <text x="950" y="365" text-anchor="middle" class="text-title">👔 HOD Direct Decision</text>
+  <text x="950" y="385" text-anchor="middle" class="text-small">HOD can act immediately</text>
+  <text x="950" y="400" text-anchor="middle" class="text-small">without waiting for admin</text>
+  <text x="950" y="420" text-anchor="middle" class="text-small" font-weight="bold" fill="#7B1FA2">Approve / Reject / Rework</text>
 
-  <!-- Admin approves path -->
-  <path d="M 300 390 L 300 430" class="arrow-green"/>
+  <!-- Admin Review path -->
+  <path d="M 250 430 L 250 480" class="arrow-blue"/>
+  <text x="190" y="460" class="text-small" fill="#2196F3">Review & Forward</text>
 
-  <!-- 4. Admin Approved - Status: pending -->
-  <rect x="150" y="430" width="300" height="70" rx="10" class="box-pending"/>
-  <text x="300" y="460" text-anchor="middle" class="text-title">Status: pending</text>
-  <text x="300" y="480" text-anchor="middle" class="text-small">✅ Admin reviewed + forwarded to HOD</text>
+  <!-- Admin Rework path -->
+  <path d="M 150 430 L 150 620 L 200 620 L 200 750" class="arrow-orange"/>
+  <text x="120" y="540" class="text-small" fill="#FF9800">Admin</text>
+  <text x="120" y="555" class="text-small" fill="#FF9800">Rework</text>
+
+  <!-- 4. Admin Reviewed - Status: pending -->
+  <rect x="100" y="480" width="300" height="70" rx="10" class="box-pending"/>
+  <text x="250" y="510" text-anchor="middle" class="text-title">Status: pending</text>
+  <text x="250" y="530" text-anchor="middle" class="text-small">✅ Admin reviewed - Forwarded to HOD</text>
 
   <!-- Arrow to HOD Decision -->
-  <path d="M 300 500 L 300 540 L 600 540 L 600 580" class="arrow"/>
+  <path d="M 250 550 L 250 590 L 600 590 L 600 630" class="arrow"/>
 
   <!-- 5. HOD Final Decision -->
-  <rect x="450" y="580" width="300" height="70" rx="10" class="box-decision"/>
-  <text x="600" y="605" text-anchor="middle" class="text-title">👔 HOD Final Decision</text>
-  <text x="600" y="625" text-anchor="middle" class="text-small">Approve / Reject / Rework</text>
+  <rect x="450" y="630" width="300" height="70" rx="10" class="box-hod"/>
+  <text x="600" y="655" text-anchor="middle" class="text-title">👔 HOD ONLY - Final Decision</text>
+  <text x="600" y="675" text-anchor="middle" class="text-small" font-weight="bold" fill="#7B1FA2">Approve / Reject / Rework</text>
 
-  <!-- HOD bypass direct path -->
-  <path d="M 900 390 L 900 540 L 750 540 L 600 580" class="arrow"/>
+  <!-- HOD direct path from pending_review -->
+  <path d="M 950 430 L 950 590 L 750 590 L 600 630" class="arrow"/>
+  <text x="850" y="510" class="text-small" fill="#7B1FA2">HOD Bypass</text>
+  <text x="850" y="525" class="text-small" fill="#7B1FA2">(Skip Admin)</text>
 
   <!-- Decision arrows -->
-  <path d="M 600 650 L 600 710" class="arrow-green"/>
-  <path d="M 650 615 L 850 615 L 850 710" class="arrow-red"/>
-  <path d="M 550 615 L 350 615 L 350 710" class="arrow-orange"/>
+  <path d="M 600 700 L 600 760" class="arrow-green"/>
+  <path d="M 650 665 L 850 665 L 850 760" class="arrow-red"/>
+  <path d="M 550 665 L 350 665 L 350 750" class="arrow-orange"/>
 
   <!-- 6a. Approved -->
-  <rect x="450" y="710" width="300" height="90" rx="10" class="box-approved"/>
-  <text x="600" y="735" text-anchor="middle" class="text-title">✅ APPROVED</text>
-  <text x="600" y="755" text-anchor="middle" class="text-small">Status: approved</text>
-  <text x="600" y="775" text-anchor="middle" class="text-small">🎉 QR Code Generated</text>
-  <text x="600" y="790" text-anchor="middle" class="text-small">📧 User notified</text>
+  <rect x="450" y="760" width="300" height="90" rx="10" class="box-approved"/>
+  <text x="600" y="785" text-anchor="middle" class="text-title">✅ APPROVED (HOD Only)</text>
+  <text x="600" y="805" text-anchor="middle" class="text-small">Status: approved</text>
+  <text x="600" y="825" text-anchor="middle" class="text-small">🎉 QR Code Generated</text>
+  <text x="600" y="840" text-anchor="middle" class="text-small">📧 User notified</text>
 
   <!-- 6b. Rejected -->
-  <rect x="800" y="710" width="200" height="90" rx="10" class="box-rejected"/>
-  <text x="900" y="735" text-anchor="middle" class="text-title">❌ REJECTED</text>
-  <text x="900" y="755" text-anchor="middle" class="text-small">Status: rejected</text>
-  <text x="900" y="775" text-anchor="middle" class="text-small">📧 User notified</text>
-  <text x="900" y="790" text-anchor="middle" class="text-small">with reason</text>
+  <rect x="800" y="760" width="200" height="90" rx="10" class="box-rejected"/>
+  <text x="900" y="785" text-anchor="middle" class="text-title">❌ REJECTED (HOD Only)</text>
+  <text x="900" y="805" text-anchor="middle" class="text-small">Status: rejected</text>
+  <text x="900" y="825" text-anchor="middle" class="text-small">📧 User notified</text>
+  <text x="900" y="840" text-anchor="middle" class="text-small">with reason</text>
 
   <!-- 6c. Rework -->
-  <rect x="200" y="710" width="200" height="90" rx="10" class="box-rework"/>
-  <text x="300" y="735" text-anchor="middle" class="text-title">🔄 REWORK</text>
-  <text x="300" y="755" text-anchor="middle" class="text-small">Status: rework_requested</text>
-  <text x="300" y="775" text-anchor="middle" class="text-small">📧 User notified</text>
-  <text x="300" y="790" text-anchor="middle" class="text-small">with changes needed</text>
+  <rect x="200" y="750" width="200" height="100" rx="10" class="box-rework"/>
+  <text x="300" y="775" text-anchor="middle" class="text-title">🔄 REWORK</text>
+  <text x="300" y="795" text-anchor="middle" class="text-small">Status: rework_requested</text>
+  <text x="300" y="815" text-anchor="middle" class="text-small">Can be sent by:</text>
+  <text x="300" y="830" text-anchor="middle" class="text-small" font-weight="bold" fill="#0288D1">Admin or HOD</text>
+  <text x="300" y="845" text-anchor="middle" class="text-small">📧 User notified</text>
 
   <!-- Rework path -->
-  <path d="M 300 800 L 300 860" class="arrow-orange"/>
+  <path d="M 300 850 L 300 910" class="arrow-orange"/>
 
   <!-- 7. User Edits -->
-  <rect x="200" y="860" width="200" height="90" rx="10" class="box-action"/>
-  <text x="300" y="890" text-anchor="middle" class="text-title">✏️ User Edits</text>
-  <text x="300" y="910" text-anchor="middle" class="text-small">Modify fields</text>
-  <text x="300" y="925" text-anchor="middle" class="text-small">(Container ID locked)</text>
-  <text x="300" y="940" text-anchor="middle" class="text-small">Upload new photos</text>
+  <rect x="200" y="910" width="200" height="90" rx="10" class="box-action"/>
+  <text x="300" y="940" text-anchor="middle" class="text-title">✏️ User Edits</text>
+  <text x="300" y="960" text-anchor="middle" class="text-small">Modify fields</text>
+  <text x="300" y="975" text-anchor="middle" class="text-small">(Container ID locked)</text>
+  <text x="300" y="990" text-anchor="middle" class="text-small">Upload new photos</text>
 
   <!-- Resubmit path back to start -->
-  <path d="M 300 950 L 300 1000 L 100 1000 L 100 100 L 450 100" class="arrow-orange"/>
-  <text x="150" y="990" text-anchor="middle" class="text-small" fill="#FF9800">Resubmit</text>
+  <path d="M 300 1000 L 300 1050 L 50 1050 L 50 120 L 450 120" class="arrow-orange"/>
+  <text x="100" y="1040" text-anchor="middle" class="text-small" fill="#FF9800">Resubmit</text>
 
   <!-- Legend -->
-  <g transform="translate(50, 1100)">
-    <text x="0" y="0" class="text-title">Legend:</text>
+  <g transform="translate(50, 1130)">
+    <text x="0" y="0" class="text-title">Legend - Status Colors:</text>
 
     <rect x="0" y="10" width="80" height="30" rx="5" class="box-pending-review"/>
     <text x="90" y="30" class="text-small">pending_review (Awaiting Admin/HOD)</text>
 
     <rect x="0" y="50" width="80" height="30" rx="5" class="box-pending"/>
-    <text x="90" y="70" class="text-small">pending (Awaiting HOD)</text>
+    <text x="90" y="70" class="text-small">pending (Admin reviewed, awaiting HOD)</text>
 
     <rect x="0" y="90" width="80" height="30" rx="5" class="box-approved"/>
-    <text x="90" y="110" class="text-small">approved (Active)</text>
+    <text x="90" y="110" class="text-small">approved (HOD approved - Active)</text>
 
-    <rect x="400" y="10" width="80" height="30" rx="5" class="box-rejected"/>
-    <text x="490" y="30" class="text-small">rejected (Inactive)</text>
+    <rect x="450" y="10" width="80" height="30" rx="5" class="box-rejected"/>
+    <text x="540" y="30" class="text-small">rejected (HOD rejected - Inactive)</text>
 
-    <rect x="400" y="50" width="80" height="30" rx="5" class="box-rework"/>
-    <text x="490" y="70" class="text-small">rework_requested (Needs Changes)</text>
+    <rect x="450" y="50" width="80" height="30" rx="5" class="box-rework"/>
+    <text x="540" y="70" class="text-small">rework_requested (Needs Changes)</text>
 
-    <rect x="400" y="90" width="80" height="30" rx="5" class="box-decision"/>
-    <text x="490" y="110" class="text-small">Decision Point</text>
+    <rect x="450" y="90" width="80" height="30" rx="5" class="box-hod"/>
+    <text x="540" y="110" class="text-small">HOD Decision Point</text>
   </g>
 
-  <!-- Roles box -->
-  <g transform="translate(850, 1100)">
-    <rect x="0" y="0" width="300" height="130" rx="5" fill="#F5F5F5" stroke="#333" stroke-width="2"/>
-    <text x="150" y="25" text-anchor="middle" class="text-title">Roles:</text>
-    <text x="10" y="50" class="text-normal">👤 User: Submit & Edit reworked</text>
-    <text x="10" y="75" class="text-normal">👨‍💼 Admin: Review submissions</text>
-    <text x="10" y="100" class="text-normal">👔 HOD: Final approval authority</text>
-    <text x="10" y="120" class="text-small">   (can bypass admin review)</text>
+  <!-- Roles and Permissions box -->
+  <g transform="translate(750, 1130)">
+    <rect x="0" y="0" width="400" height="180" rx="5" fill="#F5F5F5" stroke="#333" stroke-width="2"/>
+    <text x="200" y="25" text-anchor="middle" class="text-title">Roles & Permissions:</text>
+
+    <text x="10" y="50" class="text-normal">👤 User:</text>
+    <text x="30" y="70" class="text-small">• Submit assessments</text>
+    <text x="30" y="85" class="text-small">• Edit and resubmit reworked containers</text>
+
+    <text x="10" y="110" class="text-normal">👨‍💼 Admin:</text>
+    <text x="30" y="130" class="text-small">• Review submissions (forward to HOD)</text>
+    <text x="30" y="145" class="text-small">• Send to rework (pending_review status only)</text>
+
+    <text x="10" y="170" class="text-normal" font-weight="bold" fill="#7B1FA2">👔 HOD (Only Authority for Approval):</text>
+    <text x="30" y="190" class="text-small" font-weight="bold">• Approve, Reject, or Rework containers</text>
+    <text x="30" y="205" class="text-small">• Can bypass admin review</text>
+    <text x="30" y="220" class="text-small">• Access Pending Approvals tab</text>
   </g>
 
   <!-- Key Features -->
-  <g transform="translate(50, 1260)">
+  <g transform="translate(50, 1330)">
     <text x="0" y="0" class="text-title">Key Features:</text>
-    <text x="0" y="25" class="text-small">• HOD can bypass admin review and approve directly from pending_review status</text>
-    <text x="0" y="45" class="text-small">• Rework allows iterative improvements with locked Container ID</text>
-    <text x="0" y="65" class="text-small">• All status changes trigger email notifications to relevant parties</text>
-    <text x="0" y="85" class="text-small">• Admin review comments visible to HOD for informed decision-making</text>
-    <text x="0" y="105" class="text-small">• QR code generated only after final HOD approval</text>
+    <text x="0" y="25" class="text-small">• <tspan font-weight="bold">HOD has exclusive approval/rejection authority</tspan> - Only HOD can approve or reject containers</text>
+    <text x="0" y="45" class="text-small">• Admin reviews and forwards to HOD, or sends to rework for corrections</text>
+    <text x="0" y="65" class="text-small">• HOD can bypass admin review and act directly on pending_review containers</text>
+    <text x="0" y="85" class="text-small">• Both Admin and HOD can send containers to rework for iterative improvements</text>
+    <text x="0" y="105" class="text-small">• All status changes trigger email notifications to relevant parties</text>
   </g>
 </svg>
