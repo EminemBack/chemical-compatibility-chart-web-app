@@ -78,7 +78,7 @@
 
   <!-- Admin Review path -->
   <path d="M 250 430 L 250 480" class="arrow-blue"/>
-  <text x="190" y="460" class="text-small" fill="#2196F3">Review & Forward</text>
+  <text x="190" y="460" class="text-small" fill="#2196F3">Review AND Forward</text>
 
   <!-- Admin Rework path -->
   <path d="M 150 430 L 150 620 L 200 620 L 200 750" class="arrow-orange"/>
@@ -170,7 +170,7 @@
   <!-- Roles and Permissions box -->
   <g transform="translate(750, 1130)">
     <rect x="0" y="0" width="400" height="180" rx="5" fill="#F5F5F5" stroke="#333" stroke-width="2"/>
-    <text x="200" y="25" text-anchor="middle" class="text-title">Roles & Permissions:</text>
+    <text x="200" y="25" text-anchor="middle" class="text-title">Roles AND Permissions:</text>
 
     <text x="10" y="50" class="text-normal">👤 User:</text>
     <text x="30" y="70" class="text-small">• Submit assessments</text>
