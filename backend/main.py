@@ -170,6 +170,9 @@ class HODDecisionRequest(BaseModel):
     decision: str  # 'approved' or 'rejected'
     comment: str
 
+class AdminContainerReviewRequest(BaseModel):
+    review_comment: str
+
 # Database functions
 async def get_db_pool():
     """Get database connection pool"""
@@ -455,9 +458,42 @@ async def send_approval_email(email: str, name: str, container_id: str, status: 
         server.quit()
         
         logger.info("Approval email sent", email=email, status=status)
-        
+
     except Exception as e:
         logger.error("Failed to send approval email", error=str(e))
+
+async def send_admin_review_notification(email: str, hod_name: str, container_id: str, admin_name: str, review_comment: str):
+    """Send notification to HOD when admin reviews a container"""
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = NOTIFICATION_FROM_EMAIL
+        msg['To'] = email
+        msg['Subject'] = f"Admin Review Completed - Container {container_id}"
+
+        body = f"""
+            Hello {hod_name},
+
+            An admin has reviewed container {container_id} and it is now ready for your approval.
+
+            Reviewer: {admin_name}
+            Review Comments: {review_comment}
+
+            Please log in to the Chemical Safety Assessment System to review and approve or reject this container.
+
+            Best regards,
+            Kinross Chemical Safety Team
+        """
+
+        msg.attach(MIMEText(body, 'plain'))
+
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        server.sendmail(NOTIFICATION_FROM_EMAIL, email, msg.as_string())
+        server.quit()
+
+        logger.info("Admin review notification sent", email=email, container_id=container_id)
+
+    except Exception as e:
+        logger.error("Failed to send admin review notification", error=str(e))
 
 async def send_submission_notification(container_data: dict, submitter_name: str, submitter_email: str):
     """Send notification to safety team when container is submitted"""
@@ -1252,6 +1288,77 @@ async def get_current_user(authorization: str = Header(None)):
         raise HTTPException(status_code=401, detail="Authentication failed")
 
 # Containers Approval Process Functions
+@app.get("/containers/admin-review")
+async def get_admin_review_containers(authorization: str = Header(None)):
+    """Get pending containers for admin review (status = pending)"""
+    try:
+        current_user = await get_current_user_from_token(authorization)
+
+        # Only admins can access this
+        if current_user['role'] != 'admin':
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+        container_rows = await execute_query("""
+            SELECT c.*, u.name as submitter_name, u.email as submitter_email
+            FROM containers c
+            JOIN users u ON c.submitted_by = u.name
+            WHERE c.status = 'pending'
+            ORDER BY c.submitted_at ASC
+        """)
+
+        containers = []
+
+        for container_row in container_rows:
+            container_id = container_row['id']
+
+            # Get hazards for this container
+            hazard_rows = await execute_query("""
+                SELECT h.name, h.hazard_class, h.subclass
+                FROM hazard_categories h
+                JOIN container_hazards ch ON h.id = ch.hazard_category_id
+                WHERE ch.container_id = $1
+            """, container_id)
+
+            hazards = [{"name": row['name'], "hazard_class": row['hazard_class'], "subclass": row['subclass']}
+                      for row in hazard_rows]
+
+            # Get pairs for this container
+            pair_rows = await execute_query("""
+                SELECT hp.*, ha.name as hazard_a_name, hb.name as hazard_b_name
+                FROM hazard_pairs hp
+                JOIN hazard_categories ha ON hp.hazard_category_a_id = ha.id
+                JOIN hazard_categories hb ON hp.hazard_category_b_id = hb.id
+                WHERE hp.container_id = $1
+            """, container_id)
+
+            pairs = []
+            for pair_row in pair_rows:
+                min_dist = pair_row['min_required_distance']
+                if min_dist is None or min_dist == float('inf'):
+                    min_dist = None
+
+                pairs.append({
+                    "id": pair_row['id'],
+                    "hazard_a_name": pair_row['hazard_a_name'],
+                    "hazard_b_name": pair_row['hazard_b_name'],
+                    "distance": pair_row['distance'],
+                    "is_isolated": pair_row['is_isolated'],
+                    "min_required_distance": min_dist,
+                    "status": pair_row['status']
+                })
+
+            containers.append({
+                **dict(container_row),
+                "hazards": hazards,
+                "pairs": pairs
+            })
+
+        return containers
+
+    except Exception as e:
+        logger.error("Error fetching admin review containers", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Error fetching admin review containers: {str(e)}")
+
 @app.get("/containers/pending")
 async def get_pending_containers(authorization: str = Header(None)):
     """Get pending containers for admin approval"""
@@ -1332,6 +1439,88 @@ async def get_pending_containers(authorization: str = Header(None)):
     except Exception as e:
         logger.error("Error fetching pending containers", error=str(e))
         raise HTTPException(status_code=500, detail=f"Error fetching pending containers: {str(e)}")
+
+@app.post("/containers/{container_id}/admin-review")
+async def admin_review_container(
+    container_id: int,
+    review_request: AdminContainerReviewRequest,
+    authorization: str = Header(None)
+):
+    """Admin reviews a container and forwards to HOD for approval"""
+    try:
+        current_user = await get_current_user_from_token(authorization)
+
+        # Only admins can review
+        if current_user['role'] != 'admin':
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+        # Validate review comment
+        if not review_request.review_comment or review_request.review_comment.strip() == "":
+            raise HTTPException(status_code=400, detail="Review comment is required")
+
+        if len(review_request.review_comment.strip()) < 10:
+            raise HTTPException(
+                status_code=400,
+                detail="Review comment must be at least 10 characters long"
+            )
+
+        # Get container to check status
+        container = await execute_single(
+            "SELECT * FROM containers WHERE id = $1",
+            container_id
+        )
+
+        if not container:
+            raise HTTPException(status_code=404, detail="Container not found")
+
+        if container['status'] != 'pending':
+            raise HTTPException(
+                status_code=400,
+                detail=f"Container cannot be reviewed in {container['status']} status"
+            )
+
+        # Update container with admin review
+        await execute_command("""
+            UPDATE containers
+            SET status = 'admin_reviewed',
+                admin_reviewer = $1,
+                admin_review_date = $2,
+                admin_review_comment = $3
+            WHERE id = $4
+        """,
+            current_user['name'],
+            datetime.utcnow(),
+            review_request.review_comment.strip(),
+            container_id
+        )
+
+        # Notify HOD users
+        hod_users = await execute_query(
+            "SELECT email, name FROM users WHERE role = 'hod'"
+        )
+
+        for hod in hod_users:
+            await send_admin_review_notification(
+                hod['email'],
+                hod['name'],
+                container['container'],
+                current_user['name'],
+                review_request.review_comment.strip()
+            )
+
+        logger.info(
+            "Container admin reviewed",
+            container_id=container_id,
+            reviewer=current_user['name']
+        )
+
+        return {"message": "Container reviewed successfully and forwarded to HOD"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error processing admin review", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Error processing admin review: {str(e)}")
 
 @app.post("/containers/{container_id}/approve")
 async def approve_container(

@@ -32,6 +32,13 @@ interface ContainerData {
   approval_comment?: string;
   approved_by?: string;
   approved_at?: string;
+  admin_reviewer?: string;
+  admin_review_date?: string;
+  admin_review_comment?: string;
+  rework_reason?: string;
+  rework_count?: number;
+  reworked_by?: string;
+  reworked_at?: string;
   hazards: Array<{name: string, hazard_class: string}>;
   pairs: Array<{
     id: number;
@@ -1998,7 +2005,7 @@ function App() {
   const [hazardPairs, setHazardPairs] = useState<HazardPairData[]>([]);
   const [containers, setContainers] = useState<ContainerData[]>([]);
   // UPDATE THIS EXISTING LINE (change 'containers' to 'approvals'):
-  const [activeTab, setActiveTab] = useState<'form' | 'containers' | 'approvals' | 'deletions' | 'admin-deletions' | 'analytics' | 'users'>('form');
+  const [activeTab, setActiveTab] = useState<'form' | 'containers' | 'approvals' | 'admin-review' | 'deletions' | 'admin-deletions' | 'analytics' | 'users'>('form');
   const [loading, setLoading] = useState(false);
   const [pairStatuses, setPairStatuses] = useState<{[key: string]: any}>({});
   const [pendingContainers, setPendingContainers] = useState<ContainerData[]>([]);
@@ -2068,6 +2075,14 @@ function App() {
     type: 'approve',
     containerId: 0
   });
+
+  // Admin Review states
+  const [adminReviewContainers, setAdminReviewContainers] = useState<ContainerData[]>([]);
+  const [adminReviewModal, setAdminReviewModal] = useState<{ isOpen: boolean; containerId: number }>({
+    isOpen: false,
+    containerId: 0
+  });
+  const [adminReviewComment, setAdminReviewComment] = useState('');
 
   const [users, setUsers] = useState<User[]>([]);
   const [showUserModal, setShowUserModal] = useState(false);
@@ -2188,6 +2203,26 @@ function App() {
       setContainers(data);
     } catch (error) {
       console.error('Error fetching containers:', error);
+    }
+  };
+
+  const fetchAdminReviewContainers = async () => {
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(`${API_BASE}/containers/admin-review`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setAdminReviewContainers(data);
+      } else {
+        console.error('Error fetching admin review containers');
+      }
+    } catch (error) {
+      console.error('Error fetching admin review containers:', error);
     }
   };
 
@@ -2593,7 +2628,7 @@ function App() {
       alert('❌ Error: Comment is required');
       return;
     }
-    
+
     if (comment.trim().length < 10) {
       alert('❌ Error: Comment must be at least 10 characters long');
       return;
@@ -2623,6 +2658,60 @@ function App() {
     } catch (error) {
       console.error('Error processing approval:', error);
       alert('❌ Error processing approval. Please try again.');
+    }
+  };
+
+  const submitAdminReview = async (containerId: number, comment: string) => {
+    // Frontend validation
+    if (!comment || comment.trim().length === 0) {
+      alert('❌ Error: Review comment is required');
+      return;
+    }
+
+    if (comment.trim().length < 10) {
+      alert('❌ Error: Review comment must be at least 10 characters long');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(`${API_BASE}/containers/${containerId}/admin-review`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ review_comment: comment.trim() })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        alert(`✅ ${data.message}`);
+        setAdminReviewModal({ isOpen: false, containerId: 0 });
+        setAdminReviewComment('');
+        fetchAdminReviewContainers();
+        fetchPendingApprovalsCount(); // Refresh count for HOD
+      } else {
+        const errorData = await response.json();
+
+        // Handle FastAPI validation errors which come as an array
+        let errorMessage = 'Failed to submit review';
+        if (errorData.detail) {
+          if (Array.isArray(errorData.detail)) {
+            // FastAPI validation error format
+            errorMessage = errorData.detail.map((e: any) => e.msg || JSON.stringify(e)).join(', ');
+          } else if (typeof errorData.detail === 'string') {
+            errorMessage = errorData.detail;
+          } else {
+            errorMessage = JSON.stringify(errorData.detail);
+          }
+        }
+
+        alert(`❌ Error: ${errorMessage}`);
+      }
+    } catch (error) {
+      console.error('Error submitting admin review:', error);
+      alert('❌ Error submitting review. Please try again.');
     }
   };
 
@@ -3604,7 +3693,7 @@ function App() {
 
               {/* UPDATE approvals button: */}
               {authState.user && (authState.user.role === 'hod' || authState.user.role === 'admin') && (
-                <button 
+                <button
                   className={activeTab === 'approvals' ? 'active' : ''}
                   onClick={() => {
                     setActiveTab('approvals');
@@ -3619,6 +3708,25 @@ function App() {
                   {pendingApprovalsCount > 0 && (
                     <span className="notification-badge">
                       {pendingApprovalsCount}
+                    </span>
+                  )}
+                </button>
+              )}
+
+              {/* Admin Review Tab */}
+              {authState.user?.role === 'admin' && (
+                <button
+                  className={activeTab === 'admin-review' ? 'active' : ''}
+                  onClick={() => {
+                    setActiveTab('admin-review');
+                    fetchAdminReviewContainers();
+                  }}
+                  style={{ position: 'relative' }}
+                >
+                  <span>Admin Review</span>
+                  {adminReviewContainers.length > 0 && (
+                    <span className="notification-badge">
+                      {adminReviewContainers.length}
                     </span>
                   )}
                 </button>
