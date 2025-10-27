@@ -38,3 +38,9 @@ dist-ssr
 
 # Uploaded container attachments
 */uploads/containers/*/*
+
+# Office files
+*.pptx
+*.xlsx
+*.csv
+*.docx
