@@ -1849,7 +1849,7 @@ async def admin_review_container(
                 # if hod['email']:
                 try:
                     hod_email_body = f"""
-Hello {hod['email']},
+Hello {hod['name']},
 
 A container has been reviewed by Admin and is ready for your final approval.
 
