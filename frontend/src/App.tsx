@@ -7807,7 +7807,9 @@ function App() {
                 alt={`${attachmentHelpModal.type} view example`}
                 style={{
                   width: '100%',
+                  maxHeight: '60vh',
                   height: 'auto',
+                  objectFit: 'contain',
                   display: 'block'
                 }}
                 onError={(e) => {
