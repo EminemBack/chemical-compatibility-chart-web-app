@@ -2336,6 +2336,14 @@ function App() {
   });
   const [reworkReason, setReworkReason] = useState('');
 
+  const [attachmentHelpModal, setAttachmentHelpModal] = useState<{
+    isOpen: boolean;
+    type: 'front' | 'inside' | 'side' | null;
+  }>({
+    isOpen: false,
+    type: null
+  });
+
   // EDIT MODAL STATES
   const [editingContainerId, setEditingContainerId] = useState<number | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -2416,6 +2424,19 @@ function App() {
     containerId: 0
   });
   const [adminReviewComment, setAdminReviewComment] = useState('');
+
+  // DELETE CONTAINER MODAL STATES
+  const [deleteModal, setDeleteModal] = useState<{
+    isOpen: boolean;
+    containerId: number;
+    containerName: string;
+  }>({
+    isOpen: false,
+    containerId: 0,
+    containerName: ''
+  });
+  const [deleteReason, setDeleteReason] = useState('');
+
 
   // useEffect to check auth status and fetch hazard categories on mount
   useEffect(() => {
@@ -2971,8 +2992,9 @@ function App() {
     }
   };
 
-  const deleteContainer = async (containerId: number, containerName: string) => {
-    if (!confirm(`Are you sure you want to delete container ${containerName}? This action cannot be undone.`)) {
+  const deleteContainer = async (containerId: number, containerName: string, reason: string) => {
+    if (!reason || reason.trim().length < 10) {
+      alert('❌ Error: Deletion reason must be at least 10 characters long');
       return;
     }
 
@@ -2981,21 +3003,27 @@ function App() {
       const response = await fetch(`${API_BASE}/containers/${containerId}`, {
         method: 'DELETE',
         headers: {
+          'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
-        }
+        },
+        body: JSON.stringify({
+          deletion_reason: reason.trim()
+        })
       });
 
       if (response.ok) {
-        alert('Container deleted successfully');
-        fetchPendingContainers();
+        alert(`✅ Container "${containerName}" deleted successfully`);
+        setDeleteModal({ isOpen: false, containerId: 0, containerName: '' });
+        setDeleteReason('');
         fetchContainers();
-        fetchPendingApprovalsCount();
+        fetchPendingContainers();
       } else {
         const error = await response.json();
-        alert(`Error: ${error.detail}`);
+        alert(`❌ Error: ${error.detail}`);
       }
     } catch (error) {
-      alert('Error deleting container');
+      console.error('Error deleting container:', error);
+      alert('❌ Error deleting container. Please try again.');
     }
   };
 
@@ -4400,32 +4428,29 @@ function App() {
                           <button
                             type="button"
                             onClick={() => {
-                              if (navigator.geolocation) {
-                                navigator.geolocation.getCurrentPosition(
-                                  (position) => {
-                                    const coords = `${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}`;
-                                    setLocation(coords);
-                                  },
-                                  (error) => {
-                                    alert('Unable to get GPS coordinates: ' + error.message);
-                                  }
-                                );
-                              } else {
-                                alert('Geolocation is not supported by this browser, please type your location point or common-name');
-                              }
+                              alert('📍 GPS Location Feature\n\nThis feature is currently under development and will be available in a future release.\n\nYou can manually enter your location coordinates for now.');
                             }}
+                            title="GPS Location feature - Under Development"
                             style={{
-                              padding: '0.75rem 1rem',
-                              background: 'var(--kinross-gold)',
+                              padding: '0.75rem 1.5rem',
+                              background: 'linear-gradient(135deg, #9E9E9E 0%, #757575 100%)',
                               color: 'white',
                               border: 'none',
-                              borderRadius: '6px',
+                              borderRadius: '8px',
                               cursor: 'pointer',
-                              fontSize: '0.9rem',
+                              fontSize: '1rem',
                               fontWeight: '600'
                             }}
                           >
                             📍 Get GPS
+                            <span style={{ 
+                              fontSize: '0.75rem', 
+                              marginLeft: '0.5rem',
+                              fontStyle: 'italic',
+                              opacity: 0.9
+                            }}>
+                              (Beta)
+                            </span>
                           </button>
                         </div>
                       </label>
@@ -4613,13 +4638,31 @@ function App() {
                           border: '2px solid #F5F5F5'
                         }}>
                           <label style={{
-                            display: 'block',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
                             marginBottom: '8px',
                             fontWeight: '600',
                             color: '#1E3A5F',
                             fontSize: '14px'
                           }}>
                             Front View *
+                            <button
+                              type="button"
+                              onClick={() => setAttachmentHelpModal({ isOpen: true, type: 'front' })}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                cursor: 'pointer',
+                                fontSize: '16px',
+                                padding: '0',
+                                color: '#2196F3',
+                                lineHeight: '1'
+                              }}
+                              title="Click to see example"
+                            >
+                              ℹ️
+                            </button>
                           </label>
                           
                           {attachmentPreviews.front ? (
@@ -4681,8 +4724,8 @@ function App() {
                             onChange={(e) => handleAttachmentChange('front', e.target.files?.[0] || null)}
                             style={{
                               width: '100%',
-                              padding: '8px',
-                              fontSize: '12px',
+                              padding: '6px',
+                              fontSize: '10px',
                               border: '1px solid #CCCCCC',
                               borderRadius: '4px',
                               cursor: 'pointer'
@@ -4699,13 +4742,31 @@ function App() {
                           border: '2px solid #F5F5F5'
                         }}>
                           <label style={{
-                            display: 'block',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
                             marginBottom: '8px',
                             fontWeight: '600',
                             color: '#1E3A5F',
                             fontSize: '14px'
                           }}>
                             Inside View *
+                            <button
+                              type="button"
+                              onClick={() => setAttachmentHelpModal({ isOpen: true, type: 'inside' })}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                cursor: 'pointer',
+                                fontSize: '16px',
+                                padding: '0',
+                                color: '#2196F3',
+                                lineHeight: '1'
+                              }}
+                              title="Click to see example"
+                            >
+                              ℹ️
+                            </button>
                           </label>
                           
                           {attachmentPreviews.inside ? (
@@ -4767,8 +4828,8 @@ function App() {
                             onChange={(e) => handleAttachmentChange('inside', e.target.files?.[0] || null)}
                             style={{
                               width: '100%',
-                              padding: '8px',
-                              fontSize: '12px',
+                              padding: '6px',
+                              fontSize: '10px',
                               border: '1px solid #CCCCCC',
                               borderRadius: '4px',
                               cursor: 'pointer'
@@ -4785,13 +4846,31 @@ function App() {
                           border: '2px solid #F5F5F5'
                         }}>
                           <label style={{
-                            display: 'block',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
                             marginBottom: '8px',
                             fontWeight: '600',
                             color: '#1E3A5F',
                             fontSize: '14px'
                           }}>
                             Side View *
+                            <button
+                              type="button"
+                              onClick={() => setAttachmentHelpModal({ isOpen: true, type: 'side' })}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                cursor: 'pointer',
+                                fontSize: '16px',
+                                padding: '0',
+                                color: '#2196F3',
+                                lineHeight: '1'
+                              }}
+                              title="Click to see example"
+                            >
+                              ℹ️
+                            </button>
                           </label>
                           
                           {attachmentPreviews.side ? (
@@ -4853,8 +4932,8 @@ function App() {
                             onChange={(e) => handleAttachmentChange('side', e.target.files?.[0] || null)}
                             style={{
                               width: '100%',
-                              padding: '8px',
-                              fontSize: '12px',
+                              padding: '6px',
+                              fontSize: '10px',
                               border: '1px solid #CCCCCC',
                               borderRadius: '4px',
                               cursor: 'pointer'
@@ -5907,24 +5986,28 @@ function App() {
                               Click to view details
                             </div>
                             
+                            {/* Delete Button - Only HOD */}
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                deleteContainer(container.id, container.container);
+                                setDeleteModal({
+                                  isOpen: true,
+                                  containerId: container.id,
+                                  containerName: container.container
+                                });
                               }}
                               style={{
-                                padding: '0.25rem 0.5rem',
-                                background: '#9e9e9e',
+                                padding: '0.5rem 1rem',
+                                background: 'linear-gradient(135deg, #F44336 0%, #D32F2F 100%)',
                                 color: 'white',
                                 border: 'none',
-                                borderRadius: '4px',
+                                borderRadius: '6px',
                                 cursor: 'pointer',
-                                fontSize: '0.7rem',
+                                fontSize: '0.85rem',
                                 fontWeight: '600'
                               }}
-                              title="Delete Container"
                             >
-                              🗑️
+                              🗑️ Delete
                             </button>
                           </div>
                         </div>
@@ -7661,6 +7744,229 @@ function App() {
             />
           )}
         </>
+      )}
+
+      {/* Attachment Help Modal */}
+      {attachmentHelpModal.isOpen && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.8)',
+            backdropFilter: 'blur(5px)',
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem'
+          }}
+          onClick={() => setAttachmentHelpModal({ isOpen: false, type: null })}
+        >
+          <div 
+            style={{
+              background: 'white',
+              borderRadius: '12px',
+              padding: '2rem',
+              maxWidth: '600px',
+              width: '100%',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{
+              margin: '0 0 1rem 0',
+              color: 'var(--kinross-navy)',
+              fontSize: '1.5rem'
+            }}>
+              {attachmentHelpModal.type === 'front' && '📸 Front View Example'}
+              {attachmentHelpModal.type === 'inside' && '📸 Inside View Example'}
+              {attachmentHelpModal.type === 'side' && '📸 Side View Example'}
+            </h2>
+
+            <p style={{
+              margin: '0 0 1.5rem 0',
+              color: '#666',
+              fontSize: '1rem'
+            }}>
+              {attachmentHelpModal.type === 'front' && 'Take a clear photo of the container from the front, showing labels and identification marks.'}
+              {attachmentHelpModal.type === 'inside' && 'Take a photo showing the inside contents of the container. Ensure good lighting.'}
+              {attachmentHelpModal.type === 'side' && 'Take a photo of the container from the side, showing any warning labels or hazard symbols.'}
+            </p>
+
+            <div style={{
+              border: '2px solid var(--kinross-gold)',
+              borderRadius: '8px',
+              overflow: 'hidden',
+              marginBottom: '1.5rem'
+            }}>
+              <img 
+                src={`/container_${attachmentHelpModal.type}.png`}
+                alt={`${attachmentHelpModal.type} view example`}
+                style={{
+                  width: '100%',
+                  height: 'auto',
+                  display: 'block'
+                }}
+                onError={(e) => {
+                  // Fallback if image doesn't exist
+                  e.currentTarget.style.display = 'none';
+                  e.currentTarget.parentElement!.innerHTML = '<div style="padding: 3rem; text-align: center; color: #999;">Example image not available</div>';
+                }}
+              />
+            </div>
+
+            <button
+              onClick={() => setAttachmentHelpModal({ isOpen: false, type: null })}
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                background: 'var(--kinross-navy)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '1rem',
+                fontWeight: '600',
+                cursor: 'pointer'
+              }}
+            >
+              Got it!
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteModal.isOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(30, 58, 95, 0.8)',
+          backdropFilter: 'blur(5px)',
+          zIndex: 1000,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '1rem'
+        }} onClick={() => {
+          setDeleteModal({ isOpen: false, containerId: 0, containerName: '' });
+          setDeleteReason('');
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '12px',
+            maxWidth: '600px',
+            width: '100%',
+            padding: '2rem',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+            border: '3px solid #F44336'
+          }} onClick={(e) => e.stopPropagation()}>
+            <h2 style={{
+              margin: '0 0 1.5rem 0',
+              color: '#D32F2F',
+              fontSize: '1.5rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.75rem'
+            }}>
+              <span style={{ fontSize: '1.8rem' }}>⚠️</span>
+              Confirm Container Deletion
+            </h2>
+
+            <p style={{
+              margin: '0 0 1.5rem 0',
+              color: 'var(--kinross-dark-gray)',
+              fontSize: '1rem',
+              lineHeight: '1.6'
+            }}>
+              You are about to permanently delete container <strong>"{deleteModal.containerName}"</strong>. 
+              This action cannot be undone.
+            </p>
+
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{
+                display: 'block',
+                marginBottom: '0.75rem',
+                fontWeight: '600',
+                color: 'var(--kinross-navy)',
+                fontSize: '1rem'
+              }}>
+                Deletion Reason (Required) *
+              </label>
+              <textarea
+                value={deleteReason}
+                onChange={(e) => setDeleteReason(e.target.value)}
+                placeholder="Provide a detailed reason for deleting this container (minimum 10 characters)..."
+                style={{
+                  width: '100%',
+                  minHeight: '120px',
+                  padding: '1rem',
+                  border: '2px solid var(--kinross-medium-gray)',
+                  borderRadius: '6px',
+                  fontSize: '1rem',
+                  fontFamily: 'inherit',
+                  resize: 'vertical',
+                  boxSizing: 'border-box'
+                }}
+              />
+              <small style={{
+                display: 'block',
+                marginTop: '0.5rem',
+                color: 'var(--kinross-dark-gray)',
+                fontSize: '0.85rem'
+              }}>
+                The submitter will be notified with this reason via email.
+              </small>
+            </div>
+
+            <div style={{
+              display: 'flex',
+              gap: '1rem',
+              justifyContent: 'flex-end'
+            }}>
+              <button
+                onClick={() => {
+                  setDeleteModal({ isOpen: false, containerId: 0, containerName: '' });
+                  setDeleteReason('');
+                }}
+                style={{
+                  padding: '0.75rem 1.5rem',
+                  background: '#9e9e9e',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '1rem',
+                  fontWeight: '600'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => deleteContainer(deleteModal.containerId, deleteModal.containerName, deleteReason)}
+                disabled={!deleteReason || deleteReason.trim().length < 10}
+                style={{
+                  padding: '0.75rem 1.5rem',
+                  background: deleteReason.trim().length >= 10 ? '#F44336' : '#ccc',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: deleteReason.trim().length >= 10 ? 'pointer' : 'not-allowed',
+                  fontSize: '1rem',
+                  fontWeight: '600',
+                  opacity: deleteReason.trim().length >= 10 ? 1 : 0.6
+                }}
+              >
+                Delete Container
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Success Modal */}

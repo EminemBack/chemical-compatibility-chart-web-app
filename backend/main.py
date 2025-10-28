@@ -692,16 +692,7 @@ Kinross Chemical Safety Team
 
 async def send_admin_review_to_hod(container_data: dict, admin_name: str, user_reason: str, admin_comment: str, admin_recommendation: str):
     """Send notification to HOD after admin reviews deletion request"""
-    try:
-        # # Get all HOD emails
-        # hod_users = await execute_query(
-        #     "SELECT email, name FROM users WHERE role = 'hod' AND active = true"
-        # )
-        
-        # if not hod_users:
-        #     logger.warning("No HOD users found to notify")
-        #     return
-        
+    try:        
         hod_emails = HOD_EMAILS #[user['email'] for user in hod_users]
         
         recommendation_text = "RECOMMENDS APPROVAL" if admin_recommendation == 'approve' else "RECOMMENDS REJECTION"
@@ -756,6 +747,40 @@ Kinross Chemical Safety System (Automated Notification)
         
     except Exception as e:
         logger.error("Failed to send HOD notification", error=str(e))
+
+# Add email notification function
+async def send_deletion_notification(email: str, name: str, container_id: str, hod_name: str, reason: str):
+    """Send notification to user when container is deleted by HOD"""
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = NOTIFICATION_FROM_EMAIL
+        msg['To'] = email
+        msg['Subject'] = f"Container {container_id} - Deleted"
+
+        body = f"""
+            Hello {name},
+
+            Your container safety assessment for {container_id} has been deleted by HOD.
+
+            Deleted by: {hod_name}
+            Reason: {reason}
+
+            If you believe this was done in error, please contact the HOD or Safety Team.
+
+            Best regards,
+            Kinross Chemical Safety Team
+        """
+
+        msg.attach(MIMEText(body, 'plain'))
+
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        server.sendmail(NOTIFICATION_FROM_EMAIL, email, msg.as_string())
+        server.quit()
+
+        logger.info("Deletion notification sent", email=email, container_id=container_id)
+
+    except Exception as e:
+        logger.error("Failed to send deletion notification", error=str(e))
 
 def validate_image_file(file: UploadFile) -> bool:
     """Validate uploaded image file"""
@@ -2075,16 +2100,31 @@ async def update_container(
 
 # Delete Containers Endpoint
 @app.delete("/containers/{container_id}")
-async def delete_container(container_id: int, authorization: str = Header(None)):
-    """Delete a container (admin only)"""
+async def delete_container(
+    container_id: int,
+    deletion_data: dict,  # Add this parameter
+    authorization: str = Header(None)
+):
+    """Delete a container (HOD only) with reason"""
     try:
         current_user = await get_current_user_from_token(authorization)
         
-        if current_user['role'] not in ['hod', 'admin']:
-            raise HTTPException(status_code=403, detail="Admin access required")
+        if current_user['role'] != 'hod':
+            raise HTTPException(status_code=403, detail="HOD access required")
         
-        # Check if container exists
-        container = await execute_single("SELECT * FROM containers WHERE id = $1", container_id)
+        # Validate deletion reason
+        deletion_reason = deletion_data.get('deletion_reason', '')
+        if not deletion_reason or len(deletion_reason.strip()) < 10:
+            raise HTTPException(
+                status_code=400,
+                detail="Deletion reason must be at least 10 characters long"
+            )
+        
+        # Check if container exists and get submitter info
+        container = await execute_single(
+            "SELECT c.*, u.email, u.name as submitter_name FROM containers c JOIN users u ON c.submitted_by = u.name WHERE c.id = $1",
+            container_id
+        )
         if not container:
             raise HTTPException(status_code=404, detail="Container not found")
         
@@ -2094,9 +2134,19 @@ async def delete_container(container_id: int, authorization: str = Header(None))
                 # Delete related records first (foreign key constraints)
                 await conn.execute("DELETE FROM hazard_pairs WHERE container_id = $1", container_id)
                 await conn.execute("DELETE FROM container_hazards WHERE container_id = $1", container_id)
+                await conn.execute("DELETE FROM container_attachments WHERE container_id = $1", container_id)
                 await conn.execute("DELETE FROM containers WHERE id = $1", container_id)
         
-        logger.info("Container deleted", container_id=container_id, deleted_by=current_user['name'])
+        # Send notification to submitter
+        await send_deletion_notification(
+            container['email'],
+            container['submitter_name'],
+            container['container'],
+            current_user['name'],
+            deletion_reason.strip()
+        )
+        
+        logger.info("Container deleted", container_id=container_id, deleted_by=current_user['name'], reason=deletion_reason.strip())
         return {"message": "Container deleted successfully"}
         
     except Exception as e:
