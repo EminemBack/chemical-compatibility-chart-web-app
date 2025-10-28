@@ -1874,25 +1874,107 @@ async def admin_review_container(
                 # if hod['email']:
                 try:
                     hod_email_body = f"""
-Hello {hod['name']},
-
-A container has been reviewed by Admin and is ready for your final approval.
-
-Container Details:
-- Container ID: {container['container']}
-- Department: {container['department']}
-- Location: {container['location']}
-- Submitted by: {container['submitted_by']}
-- Reviewed by: {current_user['name']} (Admin)
-
-Admin Review Comments:
-{review_request.review_comment.strip()}
-
-Please log in to the system to approve or reject this container.
-
-Best regards,
-Kinross Safety System
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                            <meta charset="UTF-8">
+                            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                        </head>
+                        <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f5f5f5;">
+                            <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5; padding: 20px;">
+                                <tr>
+                                    <td align="center">
+                                        <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                                            <!-- Header -->
+                                            <tr>
+                                                <td style="background: linear-gradient(135deg, #1E3A5F 0%, #2C5282 100%); padding: 30px; border-radius: 8px 8px 0 0; text-align: center;">
+                                                    <h1 style="margin: 0; color: #FFD700; font-size: 24px; font-weight: 600;">
+                                                        🔔 Container Ready for Approval
+                                                    </h1>
+                                                </td>
+                                            </tr>
+                                            
+                                            <!-- Body -->
+                                            <tr>
+                                                <td style="padding: 30px;">
+                                                    <p style="margin: 0 0 20px 0; color: #333; font-size: 16px; line-height: 1.6;">
+                                                        Hello <strong>{hod['name']}</strong>,
+                                                    </p>
+                                                    
+                                                    <p style="margin: 0 0 25px 0; color: #666; font-size: 15px; line-height: 1.6;">
+                                                        A container has been reviewed by Admin and is ready for your final approval.
+                                                    </p>
+                                                    
+                                                    <!-- Container Details Box -->
+                                                    <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f8f9fa; border-left: 4px solid #FFD700; border-radius: 4px; margin-bottom: 25px;">
+                                                        <tr>
+                                                            <td style="padding: 20px;">
+                                                                <h3 style="margin: 0 0 15px 0; color: #1E3A5F; font-size: 18px; font-weight: 600;">
+                                                                    📦 Container Details
+                                                                </h3>
+                                                                <table width="100%" cellpadding="5" cellspacing="0">
+                                                                    <tr>
+                                                                        <td style="color: #666; font-size: 14px; width: 40%;"><strong>Container ID:</strong></td>
+                                                                        <td style="color: #333; font-size: 14px;">{container['container']}</td>
+                                                                    </tr>
+                                                                    <tr>
+                                                                        <td style="color: #666; font-size: 14px;"><strong>Department:</strong></td>
+                                                                        <td style="color: #333; font-size: 14px;">{container['department']}</td>
+                                                                    </tr>
+                                                                    <tr>
+                                                                        <td style="color: #666; font-size: 14px;"><strong>Location:</strong></td>
+                                                                        <td style="color: #333; font-size: 14px;">{container['location']}</td>
+                                                                    </tr>
+                                                                    <tr>
+                                                                        <td style="color: #666; font-size: 14px;"><strong>Submitted by:</strong></td>
+                                                                        <td style="color: #333; font-size: 14px;">{container['submitted_by']}</td>
+                                                                    </tr>
+                                                                    <tr>
+                                                                        <td style="color: #666; font-size: 14px;"><strong>Reviewed by:</strong></td>
+                                                                        <td style="color: #333; font-size: 14px;">{current_user['name']} (Admin)</td>
+                                                                    </tr>
+                                                                </table>
+                                                            </td>
+                                                        </tr>
+                                                    </table>
+                                                    
+                                                    <!-- Admin Comments Box -->
+                                                    <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #e8f4f8; border-left: 4px solid #2196F3; border-radius: 4px; margin-bottom: 25px;">
+                                                        <tr>
+                                                            <td style="padding: 20px;">
+                                                                <h3 style="margin: 0 0 10px 0; color: #1E3A5F; font-size: 16px; font-weight: 600;">
+                                                                    💬 Admin Review Comments
+                                                                </h3>
+                                                                <p style="margin: 0; color: #333; font-size: 14px; line-height: 1.6; white-space: pre-wrap;">
+                        {review_request.review_comment.strip()}
+                                                                </p>
+                                                            </td>
+                                                        </tr>
+                                                    </table>
+                                                    
+                                                    <p style="margin: 0 0 20px 0; color: #666; font-size: 15px; line-height: 1.6;">
+                                                        Please log in to the system to approve or reject this container.
+                                                    </p>
+                                                </td>
+                                            </tr>
+                                            
+                                            <!-- Footer -->
+                                            <tr>
+                                                <td style="background-color: #f8f9fa; padding: 20px; border-radius: 0 0 8px 8px; text-align: center; border-top: 1px solid #e0e0e0;">
+                                                    <p style="margin: 0; color: #999; font-size: 13px;">
+                                                        Best regards,<br>
+                                                        <strong style="color: #1E3A5F;">Kinross Chemical Safety Team</strong>
+                                                    </p>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+                        </body>
+                        </html>
                     """
+
                     await send_email(
                         to_email=hod_email,
                         subject=f"✅ Container Ready for HOD Approval - {container['container']}",
@@ -1915,23 +1997,100 @@ Kinross Safety System
         if submitter and submitter['email']:
             try:
                 submitter_email_body = f"""
-Hello {container['submitted_by']},
-
-Your container submission has been reviewed by the Admin team and is now awaiting HOD approval.
-
-Container Details:
-  - Container ID: {container['container']}
-  - Department: {container['department']}
-  - Location: {container['location']}
-  - Reviewed by: {current_user['name']} (Admin)
-
-Status: Admin Reviewed ✅
-
-Your submission will be reviewed by the HOD for final approval.
-
-Best regards,
-Kinross Safety Team
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <meta charset="UTF-8">
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    </head>
+                    <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f5f5f5;">
+                        <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5; padding: 20px;">
+                            <tr>
+                                <td align="center">
+                                    <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                                        <!-- Header -->
+                                        <tr>
+                                            <td style="background: linear-gradient(135deg, #1E3A5F 0%, #2C5282 100%); padding: 30px; border-radius: 8px 8px 0 0; text-align: center;">
+                                                <h1 style="margin: 0; color: #FFD700; font-size: 24px; font-weight: 600;">
+                                                    ✅ Container Admin Reviewed
+                                                </h1>
+                                            </td>
+                                        </tr>
+                                        
+                                        <!-- Body -->
+                                        <tr>
+                                            <td style="padding: 30px;">
+                                                <p style="margin: 0 0 20px 0; color: #333; font-size: 16px; line-height: 1.6;">
+                                                    Hello <strong>{container['submitted_by']}</strong>,
+                                                </p>
+                                                
+                                                <p style="margin: 0 0 25px 0; color: #666; font-size: 15px; line-height: 1.6;">
+                                                    Your container submission has been reviewed by the Admin team and is now awaiting HOD approval.
+                                                </p>
+                                                
+                                                <!-- Container Details Box -->
+                                                <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f8f9fa; border-left: 4px solid #FFD700; border-radius: 4px; margin-bottom: 25px;">
+                                                    <tr>
+                                                        <td style="padding: 20px;">
+                                                            <h3 style="margin: 0 0 15px 0; color: #1E3A5F; font-size: 18px; font-weight: 600;">
+                                                                📦 Container Details
+                                                            </h3>
+                                                            <table width="100%" cellpadding="5" cellspacing="0">
+                                                                <tr>
+                                                                    <td style="color: #666; font-size: 14px; width: 40%;"><strong>Container ID:</strong></td>
+                                                                    <td style="color: #333; font-size: 14px;">{container['container']}</td>
+                                                                </tr>
+                                                                <tr>
+                                                                    <td style="color: #666; font-size: 14px;"><strong>Department:</strong></td>
+                                                                    <td style="color: #333; font-size: 14px;">{container['department']}</td>
+                                                                </tr>
+                                                                <tr>
+                                                                    <td style="color: #666; font-size: 14px;"><strong>Location:</strong></td>
+                                                                    <td style="color: #333; font-size: 14px;">{container['location']}</td>
+                                                                </tr>
+                                                                <tr>
+                                                                    <td style="color: #666; font-size: 14px;"><strong>Reviewed by:</strong></td>
+                                                                    <td style="color: #333; font-size: 14px;">{current_user['name']} (Admin)</td>
+                                                                </tr>
+                                                            </table>
+                                                        </td>
+                                                    </tr>
+                                                </table>
+                                                
+                                                <!-- Status Badge -->
+                                                <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 25px;">
+                                                    <tr>
+                                                        <td align="center" style="padding: 15px; background-color: #e8f5e9; border-radius: 4px;">
+                                                            <p style="margin: 0; color: #2e7d32; font-size: 16px; font-weight: 600;">
+                                                                ✅ Status: Admin Reviewed
+                                                            </p>
+                                                        </td>
+                                                    </tr>
+                                                </table>
+                                                
+                                                <p style="margin: 0 0 20px 0; color: #666; font-size: 15px; line-height: 1.6;">
+                                                    Your submission will be reviewed by the HOD for final approval.
+                                                </p>
+                                            </td>
+                                        </tr>
+                                        
+                                        <!-- Footer -->
+                                        <tr>
+                                            <td style="background-color: #f8f9fa; padding: 20px; border-radius: 0 0 8px 8px; text-align: center; border-top: 1px solid #e0e0e0;">
+                                                <p style="margin: 0; color: #999; font-size: 13px;">
+                                                    Best regards,<br>
+                                                    <strong style="color: #1E3A5F;">Kinross Chemical Safety Team</strong>
+                                                </p>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                        </table>
+                    </body>
+                    </html>
                 """
+                
                 await send_email(
                     submitter['email'],
                     f"📋 Container Under Review - {container['container']}",
