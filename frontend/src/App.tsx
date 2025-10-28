@@ -5816,7 +5816,7 @@ function App() {
                               display: 'flex',
                               justifyContent: 'space-between'
                             }}>
-                              <span style={{ fontWeight: '600' }}>Submitted:</span>
+                              <span style={{ fontWeight: '600' }}>Date:</span>
                               <span>{new Date(container.submitted_at).toLocaleDateString()}</span>
                             </div>
                             
@@ -5824,7 +5824,7 @@ function App() {
                               display: 'flex',
                               justifyContent: 'space-between'
                             }}>
-                              <span style={{ fontWeight: '600' }}>By:</span>
+                              <span style={{ fontWeight: '600' }}>Submitted By:</span>
                               <span style={{ 
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis',
@@ -6194,7 +6194,7 @@ function App() {
                               display: 'flex',
                               justifyContent: 'space-between'
                             }}>
-                              <span style={{ fontWeight: '600' }}>Submitted:</span>
+                              <span style={{ fontWeight: '600' }}>Date:</span>
                               <span>{new Date(container.submitted_at).toLocaleDateString()}</span>
                             </div>
                             
@@ -6202,7 +6202,7 @@ function App() {
                               display: 'flex',
                               justifyContent: 'space-between'
                             }}>
-                              <span style={{ fontWeight: '600' }}>By:</span>
+                              <span style={{ fontWeight: '600' }}>Submitted By:</span>
                               <span style={{ 
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis',
