@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Chemical Compatibility Web App — User Guide</title>
+  <meta name="author" content="Your Team" />
+  <meta name="description" content="End‑user and admin guide for the Chemical Compatibility Web App." />
+  <a href="/docs/user-guide.html" target="_blank" rel="noopener">Help</a>
+  <style>
+    :root {
+      --text: #0f172a;
+      --muted: #475569;
+      --bg: #ffffff;
+      --border: #e2e8f0;
+      --accent: #0ea5e9;
+    }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", sans-serif;
+      color: var(--text);
+      background: var(--bg);
+      line-height: 1.6;
+      font-size: 16px;
+    }
+    .container { max-width: 860px; margin: 0 auto; padding: 2rem 1.25rem; }
+    header.title {
+      text-align: center; margin: 2rem 0 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border);
+    }
+    header.title h1 { margin: 0; font-size: 2rem; }
+    header.title p { margin: 0.25rem 0; color: var(--muted); }
+    nav#toc {
+      border: 1px solid var(--border); border-radius: 8px; padding: 1rem; background: #fafafa; margin: 1.5rem 0 2rem;
+    }
+    nav#toc h2 { margin: 0 0 0.5rem; font-size: 1.1rem; }
+    nav#toc a { text-decoration: none; color: var(--accent); }
+    h2 { margin-top: 2rem; font-size: 1.5rem; }
+    h3 { margin-top: 1.25rem; font-size: 1.15rem; }
+    code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+    pre {
+      background: #0b1220; color: #e2e8f0; padding: 0.75rem 1rem; border-radius: 6px; overflow: auto;
+    }
+    .tip, .note, .warn {
+      border-left: 4px solid var(--accent); background: #f0f9ff; padding: 0.75rem 1rem; margin: 1rem 0; border-radius: 4px;
+    }
+    .warn { border-left-color: #f59e0b; background: #fff7ed; }
+    .muted { color: var(--muted); }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.95rem; }
+    th, td { border: 1px solid var(--border); padding: 0.5rem 0.75rem; text-align: left; vertical-align: top; }
+    th { background: #f8fafc; }
+    img { max-width: 100%; height: auto; }
+    .page-break { page-break-before: always; break-before: page; margin-top: 2rem; }
+    @media print {
+      nav#toc { page-break-after: always; }
+      a { color: inherit; text-decoration: none; }
+      .tip, .note, .warn { border-left-width: 2px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="title">
+      <h1>Chemical Compatibility Web App — User Guide</h1>
+      <p>Version 0.1.0 • <span class="muted">Last updated: YYYY‑MM‑DD</span></p>
+      <p class="muted">This guide covers setup, usage, GPS location input, attachments, and admin review workflow.</p>
+    </header>
+
+    <nav id="toc">
+      <h2>Table of Contents</h2>
+      <ol>
+        <li><a href="#overview">Overview</a></li>
+        <li><a href="#features">Key Features</a></li>
+        <li><a href="#requirements">System Requirements</a></li>
+        <li><a href="#installation">Installation</a></li>
+        <li><a href="#running">Running the App</a></li>
+        <li><a href="#using">Using the App</a></li>
+        <li><a href="#gps">GPS Location Picker</a></li>
+        <li><a href="#attachments">Attachments</a></li>
+        <li><a href="#notifications">Phone/WhatsApp</a></li>
+        <li><a href="#admin">Admin Review Workflow</a></li>
+        <li><a href="#data">Data Model (Conceptual)</a></li>
+        <li><a href="#troubleshooting">Troubleshooting</a></li>
+        <li><a href="#glossary">Glossary</a></li>
+        <li><a href="#changelog">Changelog</a></li>
+      </ol>
+    </nav>
+
+    <section id="overview">
+      <h2>Overview</h2>
+      <p>
+        The Chemical Compatibility Web App helps users assess and record chemical compatibility decisions,
+        attach supporting evidence, and capture location context. Requests flow through a lightweight
+        review process so admins can validate or request rework.
+      </p>
+      <div class="note">
+        Tip: This document is printable and includes page breaks suitable for conversion to PDF/ePub.
+      </div>
+    </section>
+
+    <section id="features">
+      <h2>Key Features</h2>
+      <ul>
+        <li>Compatibility lookup and request submission workflow.</li>
+        <li>GPS location capture with an interactive picker (map or coordinates).</li>
+        <li>File attachments for supporting documents (e.g., SDS, photos).</li>
+        <li>Contact fields for phone and WhatsApp updates.</li>
+        <li>Admin review states: Pending Review, Approved, Rework Requested.</li>
+      </ul>
+    </section>
+
+    <section id="requirements" class="page-break">
+      <h2>System Requirements</h2>
+      <ul>
+        <li>Docker and Docker Compose (recommended), or Node.js (for frontend) and Python 3.x (for backend).</li>
+        <li>Access to a PostgreSQL database (Docker service provided).</li>
+        <li>Modern browser with geolocation support for GPS features.</li>
+      </ul>
+    </section>
+
+    <section id="installation">
+      <h2>Installation</h2>
+      <h3>1) Clone and Configure Environment</h3>
+      <pre><code># Clone the repo (example)
+git clone &lt;your-repo-url&gt; chemical-compatibility-chart-web-app
+cd chemical-compatibility-chart-web-app
+
+# Copy and edit environment variables
+cp .env.example .env   # if provided, else edit .env directly
+</code></pre>
+      <p>Review and set required variables in <code>.env</code> such as database credentials and ports.</p>
+
+      <h3>2) Database Initialization</h3>
+      <p>
+        The <code>database/init/</code> folder contains SQL scripts to initialize and evolve the schema:
+      </p>
+      <ul>
+        <li><code>02-init.sql</code> (base schema)</li>
+        <li><code>03-add-phone-number.sql</code></li>
+        <li><code>04-add-whatsapp.sql</code></li>
+        <li><code>05-add-attachment-support.sql</code></li>
+        <li><code>06-add-rework-support.sql</code></li>
+        <li><code>07-add-admin-review.sql</code></li>
+        <li><code>08-add-pending-review-status.sql</code></li>
+      </ul>
+      <p>When using Docker Compose, these run automatically on first startup.</p>
+    </section>
+
+    <section id="running">
+      <h2>Running the App</h2>
+      <h3>Option A — Docker Compose (Recommended)</h3>
+      <pre><code>docker-compose up --build -d
+# Visit http://localhost:&lt;frontend_port&gt; (see .env)
+</code></pre>
+
+      <h3>Option B — Local Dev</h3>
+      <ul>
+        <li>Backend: run your Python web server (see <code>backend/main.py</code>) and configure DB env vars.</li>
+        <li>Frontend: start the dev server (see <code>frontend/index.html</code> / tooling used).</li>
+      </ul>
+      <div class="tip">
+        If your stack uses a single Compose file (<code>docker-compose.yml</code>) and a production override (<code>docker-compose.prod.yml</code>),
+        use the prod file for hardened settings: <code>docker-compose -f docker-compose.prod.yml up -d</code>.
+      </div>
+    </section>
+
+    <section id="using" class="page-break">
+      <h2>Using the App</h2>
+      <h3>Create a Compatibility Request</h3>
+      <ol>
+        <li>Open the app in your browser.</li>
+        <li>Select or enter the chemicals/process you want to evaluate.</li>
+        <li>Provide context (description, environment, materials involved).</li>
+        <li>(Optional) Attach evidence files (e.g., SDS, datasheets).</li>
+        <li>(Optional) Add your phone and/or WhatsApp for updates.</li>
+        <li>(Optional) Add location using the GPS picker (see next section).</li>
+        <li>Submit the request for review.</li>
+      </ol>
+
+      <h3>View Compatibility or Status</h3>
+      <ul>
+        <li>Check the compatibility chart/results after submission (if immediate evaluation is available).</li>
+        <li>Track the review status: Pending Review → Approved or Rework Requested.</li>
+      </ul>
+    </section>
+
+    <section id="gps">
+      <h2>GPS Location Picker</h2>
+      <p>
+        The app includes a GPS picker modal to capture latitude/longitude. When prompted by your browser,
+        allow location access for auto-detection. You can also enter coordinates manually.
+      </p>
+      <h3>Steps</h3>
+      <ol>
+        <li>Click “Use GPS” or the relevant location button in the form.</li>
+        <li>In the modal, either:
+          <ul>
+            <li>Use current location (if permission granted), or</li>
+            <li>Search/drag the map pin, or</li>
+            <li>Enter coordinates manually.</li>
+          </ul>
+        </li>
+        <li>Confirm to save the location back to the form.</li>
+      </ol>
+      <div class="note">
+        Internally, the UI integrates a <code>GPSLocationPicker</code> modal component to pass selected coordinates to the form state.
+      </div>
+    </section>
+
+    <section id="attachments" class="page-break">
+      <h2>Attachments</h2>
+      <p>
+        You can upload supporting files to help reviewers validate your request. Allowed types and size limits
+        may be enforced by the backend.
+      </p>
+      <ul>
+        <li>Use the “Attach file(s)” control where available.</li>
+        <li>Upload SDS, PDFs, images, or logs as permitted.</li>
+        <li>Attach only non-sensitive information unless explicitly required.</li>
+      </ul>
+      <div class="warn">
+        Large files or disallowed types will be rejected by the server.
+      </div>
+    </section>
+
+    <section id="notifications">
+      <h2>Phone/WhatsApp</h2>
+      <p>
+        Add your phone number and/or WhatsApp number to receive updates about your request’s progress,
+        if notifications are configured.
+      </p>
+      <ul>
+        <li>Enter numbers in international format where possible (+CC...).</li>
+        <li>Providing contact info is optional unless required by policy.</li>
+      </ul>
+    </section>
+
+    <section id="admin" class="page-break">
+      <h2>Admin Review Workflow</h2>
+      <h3>States</h3>
+      <table>
+        <thead>
+          <tr><th>Status</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Pending Review</td><td>Newly submitted, awaiting admin action.</td></tr>
+          <tr><td>Approved</td><td>Validated by admin; results confirmed.</td></tr>
+          <tr><td>Rework Requested</td><td>Needs more info or changes from submitter.</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Admin Actions</h3>
+      <ul>
+        <li>Open a request, review details, attachments, and location.</li>
+        <li>Approve or request rework with feedback.</li>
+        <li>Optionally edit metadata if policy allows.</li>
+      </ul>
+    </section>
+
+    <section id="data">
+      <h2>Data Model (Conceptual)</h2>
+      <table>
+        <thead>
+          <tr><th>Entity</th><th>Key Fields</th><th>Notes</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Chemical</td><td>name, identifiers</td><td>Catalog of chemicals.</td></tr>
+          <tr><td>CompatibilityRequest</td><td>details, requester, status</td><td>Core record for evaluations.</td></tr>
+          <tr><td>Attachment</td><td>file name, type, size</td><td>Uploaded evidence per request.</td></tr>
+          <tr><td>Location</td><td>lat, lng</td><td>Captured via GPS picker.</td></tr>
+          <tr><td>Review</td><td>status, notes, timestamps</td><td>Admin audit trail.</td></tr>
+        </tbody>
+      </table>
+      <p class="muted">See SQL migrations in <code>database/init/</code> for authoritative definitions.</p>
+    </section>
+
+    <section id="troubleshooting" class="page-break">
+      <h2>Troubleshooting</h2>
+      <h3>Browser Location Denied</h3>
+      <ul>
+        <li>Enable location permissions for the site.</li>
+        <li>Enter coordinates manually as a fallback.</li>
+      </ul>
+
+      <h3>File Upload Fails</h3>
+      <ul>
+        <li>Check file size and type limits.</li>
+        <li>Try a smaller file or convert to PDF.</li>
+      </ul>
+
+      <h3>App Doesn’t Start</h3>
+      <ul>
+        <li>With Docker: ensure images build and ports aren’t in use.</li>
+        <li>Without Docker: verify environment variables and DB connectivity.</li>
+      </ul>
+    </section>
+
+    <section id="glossary">
+      <h2>Glossary</h2>
+      <ul>
+        <li><strong>Compatibility</strong>: Suitability of chemicals/materials under given conditions.</li>
+        <li><strong>GPS</strong>: Global Positioning System; used for location capture.</li>
+        <li><strong>Rework</strong>: Submitter changes requested by admin before approval.</li>
+      </ul>
+    </section>
+
+    <section id="changelog">
+      <h2>Changelog</h2>
+      <ul>
+        <li>0.1.0 — Initial guide. Documents GPS picker, attachments, phone/WhatsApp, and review workflow.</li>
+      </ul>
+    </section>
+
+    <footer class="page-break">
+      <p class="muted">
+        © YYYY Your Organization. For internal use. Replace placeholders before publishing.
+      </p>
+    </footer>
+  </div>
+</body>
+</html>
