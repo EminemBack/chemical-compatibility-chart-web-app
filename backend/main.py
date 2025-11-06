@@ -77,7 +77,7 @@ PRODUCTION = os.getenv("PRODUCTION", "false").lower() == "true"
 
 # File upload settings
 ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'png'}
-MAX_FILE_SIZE = 1 * 1024 * 1024  # 1MB
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
 # FastAPI app
 app = FastAPI(

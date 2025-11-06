@@ -4172,40 +4172,70 @@ function App() {
       {authState.user && !showAuth && (
         <>
           <header className="app-header">
-            {/* Logo Row */}
+            {/* Logo Row with README Button */}
             <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
               marginBottom: '1.5rem',
               paddingBottom: '1rem',
-              borderBottom: '2px solid var(--kinross-light-gray)',
-              flexWrap: 'wrap',
-              gap: '1rem'
+              borderBottom: '2px solid var(--kinross-light-gray)'
             }}>
-              <img 
-                src="/kinross-logo.png" 
-                alt="Kinross Gold Corporation" 
-                style={{
-                  height: '60px',
-                  objectFit: 'contain',
-                  maxWidth: '200px'
-                }}
-              />
-              <img 
-                src="/safeground-logo.png" 
-                alt="Safeground" 
-                style={{
-                  height: '50px',
-                  objectFit: 'contain',
-                  maxWidth: '200px'
-                }}
-              />
+              {/* Logos */}
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '0.5rem',
+                flexWrap: 'wrap',
+                gap: '1rem'
+              }}>
+                <img 
+                  src="/kinross-logo.png" 
+                  alt="Kinross Gold Corporation" 
+                  style={{
+                    height: '60px',
+                    objectFit: 'contain',
+                    maxWidth: '200px'
+                  }}
+                />
+                <img 
+                  src="/safeground-logo.png" 
+                  alt="Safeground" 
+                  style={{
+                    height: '50px',
+                    objectFit: 'contain',
+                    maxWidth: '200px'
+                  }}
+                />
+              </div>
+              
+              {/* README Button - Aligned Right under Safeground Logo */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <a 
+                  href="/user-guide.html" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  style={{
+                    display: 'inline-block',
+                    padding: '0.5rem 1rem',
+                    background: 'var(--kinross-navy)',
+                    color: 'white',
+                    textDecoration: 'none',
+                    borderRadius: '4px',
+                    fontWeight: '600',
+                    fontSize: '0.85rem',
+                    cursor: 'pointer',
+                    transition: 'background 0.3s ease'
+                  }}
+                  onMouseOver={(e) => e.currentTarget.style.background = '#1a4d7a'}
+                  onMouseOut={(e) => e.currentTarget.style.background = 'var(--kinross-navy)'}
+                >
+                  📖 READ ME
+                </a>
+              </div>
             </div>
 
             {/* Title Section */}
             <h1>Chemical Container Safety Assessment</h1>
-            <p className="kinross-subtitle">Kinross Gold Corporation - DOT Hazard Class Compatibility System</p>
+            <p className="kinross-subtitle">Kinross Gold Corporation - Hazard Class Compatibility System</p>
       
             {/* ADD USER INFO */}
             {authState.user && (
@@ -4219,7 +4249,7 @@ function App() {
                 borderRadius: '8px'
               }}>
                 <div>
-                  <strong>{authState.user.name}</strong> ({authState.user.role})
+                  <strong>{authState.user.name}</strong> ({authState.user.role.toUpperCase()})
                   <br />
                   <small>{authState.user.email} • {authState.user.department}</small>
                 </div>
@@ -4988,7 +5018,7 @@ function App() {
                         lineHeight: '1.5'
                       }}>
                         Before selecting hazard classes, consult the 3E Online Portal to identify 
-                        the correct DOT hazard classifications and safety information for your chemicals.
+                        the correct hazard classifications and safety information for your chemicals.
                       </p>
                     </div>
                     <a
@@ -5030,7 +5060,7 @@ function App() {
 
                 {/* Hazard Selection */}
                 <div className="hazard-selection">
-                  <h3>Select DOT Hazard Classes Present in Container</h3>
+                  <h3>Select Hazard Classes Present in Container</h3>
                   <div className="ghs-grid">
                     {hazardCategories.map(category => {
                       const isSelected = selectedHazards.find(h => h.id === category.id);
@@ -7220,7 +7250,8 @@ function App() {
           </main>
 
           <footer className="kinross-footer">
-            <p>© 2025 Kinross Gold Corporation - Chemical Container Safety Management System</p>
+            <p>© 2025 Kinross Gold Corporation - Tasiast - Chemical Container Safety Management System</p>
+            <p>Developped by the IT Department</p>
           </footer>
 
           {/* Approval Comment MODAL: */}

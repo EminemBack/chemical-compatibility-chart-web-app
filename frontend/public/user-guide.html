@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Kinross Chemical Compatibility — End‑User Guide</title>
   <meta name="description" content="Step-by-step guide for creating and submitting a compatibility request." />
-  <a href="/docs/user-guide.html" target="_blank" rel="noopener">Help</a>
+  <!-- <a href="/docs/user-guide.html" target="_blank" rel="noopener">Help</a> -->
   <style>
     /* Kinross-inspired palette (replace with official hex codes if you have them) */
     :root{
@@ -94,105 +94,84 @@
     <section id="open">
       <h2>1) Open the App</h2>
       <p>Open the application in your browser. Use the URL provided by your team or IT.</p>
-      <div class="shot-placeholder">
-        PLACE SCREENSHOT: Home screen / landing page
-        <small>Replace this box with: docs/images/step-01-home.png</small>
-      </div>
-      <!-- To replace: 
       <figure class="screenshot">
-        <img src="images/step-01-home.png" alt="Home screen" />
-        <figcaption>Home screen</figcaption>
+        <img src="/step-01-home.png" alt="Home screen" />
+        <figcaption>Home screen / Landing page</figcaption>
       </figure>
-      -->
       <div class="note">Use a modern browser (Chrome, Edge, or Firefox) for the best experience.</div>
     </section>
 
+    <section id="contact">
+      <h2>2) Fill all the required fields</h2>
+      <p>Provide necessary informations about the request.</p>
+      <figure class="screenshot">
+        <img src="/step-05-contact.png" alt="Contact fields" />
+        <figcaption>Contact fields (phone/WhatsApp)</figcaption>
+      </figure>
+    </section>
+
+    <section id="attachments" class="page-break">
+      <h2>3) Attach Evidence</h2>
+      <p>Upload supporting files/pictures that help validate your request (e.g., photos).</p>
+      <ul>
+        <li>Use the “Attach file(s)” or “Upload” button where available.</li>
+        <li>Accepted file types and size limits may apply. If an upload fails, try a smaller file or PDF.</li>
+        <li>Click on ℹ️ to have an idea of the picture you should upload.</li>
+      </ul>
+      <figure class="screenshot">
+        <img src="/step-04-attachments.png" alt="File attachments" />
+        <figcaption>File attachment control and example files</figcaption>
+      </figure>
+      <div class="warn">Do not upload sensitive or confidential documents unless policy explicitly permits.</div>
+    </section>
+
     <section id="chemicals" class="page-break">
-      <h2>2) Select or Enter the Chemicals/Process</h2>
-      <p>Choose the chemical(s) or process you want to evaluate. Depending on your configuration, you can search, pick from a list, or enter details manually.</p>
+      <h2>4) Review your product in Safety Data Sheet</h2>
+      <!-- <p>Choose the chemical(s) or process you want to evaluate. Depending on your configuration, you can search, pick from a list, or enter details manually.</p> -->
       <ul>
         <li>Search by name, identifier, or category.</li>
         <li>Add multiple items if the evaluation involves more than one chemical/material.</li>
       </ul>
-      <div class="shot-placeholder">
-        PLACE SCREENSHOT: Chemical selection/entry
-        <small>Replace with: docs/images/step-02-chemicals.png</small>
-      </div>
+      <figure class="screenshot">
+        <img src="/step-02-chemicals.png" alt="Chemical selection" />
+        <figcaption>Chemical selection/entry screen</figcaption>
+      </figure>
     </section>
 
     <section id="context">
-      <h2>3) Provide Context</h2>
-      <p>Describe the scenario so reviewers can understand the use case and risk:</p>
+      <h2>5) Provide Context</h2>
+      <p>Select the different Hazard existing in your container:</p>
       <ul>
-        <li>Description of the task or process.</li>
-        <li>Operating environment (temperature, pressure, exposure).</li>
-        <li>Materials involved (containers, piping, gaskets, surfaces).</li>
+        <li>Select one or more hazards.</li>
+        <li>Go down and provide the separation distance.</li>
       </ul>
-      <div class="shot-placeholder">
-        PLACE SCREENSHOT: Context/details fields
-        <small>Replace with: docs/images/step-03-context.png</small>
-      </div>
-    </section>
-
-    <section id="attachments" class="page-break">
-      <h2>4) Attach Evidence (Optional)</h2>
-      <p>Upload supporting files that help validate your request (e.g., SDS, datasheets, photos, test results).</p>
-      <ul>
-        <li>Use the “Attach file(s)” or “Upload” button where available.</li>
-        <li>Accepted file types and size limits may apply. If an upload fails, try a smaller file or PDF.</li>
-      </ul>
-      <div class="shot-placeholder">
-        PLACE SCREENSHOT: File attachment control and example files
-        <small>Replace with: docs/images/step-04-attachments.png</small>
-      </div>
-      <div class="warn">Do not upload sensitive or confidential documents unless policy explicitly permits.</div>
-    </section>
-
-    <section id="contact">
-      <h2>5) Add Phone and/or WhatsApp (Optional)</h2>
-      <p>Provide contact details to receive updates about the request (if notifications are enabled by your admins).</p>
-      <ul>
-        <li>Enter numbers in international format where possible (e.g., +1 555‑0100).</li>
-        <li>Providing contact info is optional unless your site’s policy requires it.</li>
-      </ul>
-      <div class="shot-placeholder">
-        PLACE SCREENSHOT: Contact fields (phone/WhatsApp)
-        <small>Replace with: docs/images/step-05-contact.png</small>
-      </div>
+      <figure class="screenshot">
+        <img src="/step-03-context.png" alt="Context details" />
+        <figcaption>Context and details fields</figcaption>
+      </figure>
     </section>
 
     <section id="gps" class="page-break">
-      <h2>6) Add Location Using the GPS Picker (Optional)</h2>
-      <p>If location is relevant, use the GPS picker to capture coordinates. Your browser may ask for permission to access your location—allow it to enable auto‑detection.</p>
-      <ol class="steps">
-        <li>Click “Use GPS” or the location button on the form to open the GPS picker.</li>
-        <li>In the modal, you can:
-          <ul>
-            <li>Use current location (if permission granted), or</li>
-            <li>Search/drag the pin on the map, or</li>
-            <li>Enter latitude and longitude manually.</li>
-          </ul>
-        </li>
-        <li>Confirm to save the selected coordinates back to your request.</li>
-      </ol>
-      <div class="shot-placeholder">
-        PLACE SCREENSHOT: GPS picker modal with map/pin/coordinates
-        <small>Replace with: docs/images/step-06-gps-picker.png</small>
-      </div>
+      <h2>6) Check the Compatibility Matrix</h2>
+      <p> To know about the combination and the separation distance of your existing Hazard</p>
+      <figure class="screenshot">
+        <img src="/step-07-gps-picker.png" alt="Submit screen" />
+        <figcaption>Final review and Submit button</figcaption>
+      </figure>
       <div class="tip">If permission is denied or unavailable, enter coordinates manually.</div>
-    </section>
+    </section>    
 
     <section id="submit">
-      <h2>7) Submit the Request for Review</h2>
+      <h2>7) Check the box & Submit the Request for Review</h2>
       <p>Review your entries, then click “Submit” to send your request for review.</p>
       <ul>
         <li>Requests typically enter “Pending Review” until an admin approves or requests rework.</li>
         <li>If rework is requested, you will see feedback and can edit and resubmit.</li>
       </ul>
-      <div class="shot-placeholder">
-        PLACE SCREENSHOT: Final review and Submit button
-        <small>Replace with: docs/images/step-07-submit.png</small>
-      </div>
+      <figure class="screenshot">
+        <img src="/step-06-submit.png" alt="Submit screen" />
+        <figcaption>Final review and Submit button</figcaption>
+      </figure>
       <div class="note">You can return later to check status and reviewer notes.</div>
     </section>
 
