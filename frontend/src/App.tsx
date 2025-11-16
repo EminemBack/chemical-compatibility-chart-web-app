@@ -3631,55 +3631,73 @@ function App() {
   const loadContainerForEdit = async (containerId: number) => {
     try {
       const token = localStorage.getItem('access_token');
+      if (!token) {
+        alert('You must be logged in to edit containers');
+        return;
+      }
+
+      console.log('Loading container for edit:', containerId);
       const response = await fetch(`${API_BASE}/containers/`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
 
-      if (response.ok) {
-        const containers = await response.json();
-        const container = containers.find((c: ContainerData) => c.id === containerId);
-        
-        if (!container) {
-          alert('Container not found');
-          return;
-        }
-
-        // Load container data into form
-        setDepartment(container.department);
-        setLocation(container.location);
-        setContainer(container.container);
-        setContainerType(container.container_type);
-        setWhatsappNumber(container.whatsapp_number);
-        
-        // Load hazards
-        const hazardsToSelect = hazardCategories.filter(hc => 
-          container.hazards.some((h: any) => h.name === hc.name)
-        );
-        setSelectedHazards(hazardsToSelect);
-        
-        // Load pairs
-        const pairs = container.pairs.map((p: any) => ({
-          hazard_category_a_id: hazardCategories.find(h => h.name === p.hazard_a_name)?.id || 0,
-          hazard_category_b_id: hazardCategories.find(h => h.name === p.hazard_b_name)?.id || 0,
-          distance: p.distance
-        }));
-        setHazardPairs(pairs);
-        
-        // Load existing attachments
-        await loadExistingAttachments(containerId);
-        
-        // Set edit mode
-        setEditingContainerId(containerId);
-        setIsEditMode(true);
-        setActiveTab('form');
-        
-        alert(`✏️ Loaded container for editing. Please make your changes and resubmit.`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Failed to fetch containers:', response.status, errorText);
+        alert(`Failed to load containers: ${response.status} ${response.statusText}`);
+        return;
       }
+
+      const containers = await response.json();
+      console.log('Fetched containers:', containers.length);
+
+      const container = containers.find((c: ContainerData) => c.id === containerId);
+
+      if (!container) {
+        console.error('Container not found in list:', containerId);
+        alert('Container not found');
+        return;
+      }
+
+      console.log('Found container:', container);
+
+      // Load container data into form
+      setDepartment(container.department);
+      setLocation(container.location);
+      setContainer(container.container);
+      setContainerType(container.container_type);
+      setWhatsappNumber(container.whatsapp_number);
+
+      // Load hazards
+      console.log('Loading hazards:', container.hazards);
+      const hazardsToSelect = hazardCategories.filter(hc =>
+        container.hazards.some((h: any) => h.name === hc.name)
+      );
+      setSelectedHazards(hazardsToSelect);
+
+      // Load pairs
+      console.log('Loading pairs:', container.pairs);
+      const pairs = container.pairs.map((p: any) => ({
+        hazard_category_a_id: hazardCategories.find(h => h.name === p.hazard_a_name)?.id || 0,
+        hazard_category_b_id: hazardCategories.find(h => h.name === p.hazard_b_name)?.id || 0,
+        distance: p.distance
+      }));
+      setHazardPairs(pairs);
+
+      // Load existing attachments
+      await loadExistingAttachments(containerId);
+
+      // Set edit mode
+      setEditingContainerId(containerId);
+      setIsEditMode(true);
+      setActiveTab('form');
+
+      alert(`✏️ Loaded container for editing. Please make your changes and resubmit.`);
     } catch (error) {
       console.error('Error loading container:', error);
-      alert('Failed to load container for editing');
+      alert(`Failed to load container for editing: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
